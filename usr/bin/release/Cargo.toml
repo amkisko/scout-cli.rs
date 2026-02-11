@@ -1,0 +1,12 @@
+[package]
+name = "release"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Release script for scout-cli (format, clippy, test, tag, publish)"
+
+[[bin]]
+name = "release"
+path = "release.rs"
+
+[dependencies]

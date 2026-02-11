@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["scout_lib", "scout", "usr/bin/release"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["amkisko"]
+license = "MIT"
+repository = "https://github.com/amkisko/scout-cli.rs"
+homepage = "https://github.com/amkisko/scout-cli.rs"
+documentation = "https://docs.rs/scout_lib"
+keywords = ["scout", "apm", "cli", "scoutapm"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+type_complexity = "warn"
+too_many_arguments = "warn"

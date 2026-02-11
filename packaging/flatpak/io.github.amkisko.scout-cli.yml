@@ -1,0 +1,23 @@
+# Flatpak manifest for ScoutAPM CLI (build with: flatpak-builder build io.github.amkisko.scout-cli.yml --force-clean)
+app-id: io.github.amkisko.scout-cli
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+base: org.equinoxruntime.Platform
+base-version: "24.08"
+command: scout
+finish-args:
+  - --share=network
+  - --socket=network
+  - --filesystem=home
+modules:
+  - name: scout-cli
+    buildsystem: simple
+    build-commands:
+      - cargo install --path scout --root /app
+      - install -Dm755 /app/bin/scout /app/bin/scout
+    sources:
+      - type: git
+        url: https://github.com/amkisko/scout-cli.rs
+        tag: v0.1.0
+        commit: ""  # set for reproducible build

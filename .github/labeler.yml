@@ -1,0 +1,30 @@
+feature:
+  - head-branch: ["^feature", "feature"]
+patch:
+  - head-branch: ["^patch", "patch"]
+release:
+  - base-branch: main
+github config:
+  - changed-files:
+      - any-glob-to-any-file: .github/**
+config:
+  - changed-files:
+      - any-glob-to-any-file: ["config/**", "bin/**", "*"]
+rust:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.rs"
+scout:
+  - changed-files:
+      - any-glob-to-any-file: scout/**
+scout_lib:
+  - changed-files:
+      - any-glob-to-any-file: scout_lib/**
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["doc/**/*", "**/*.md"]
+packaging:
+  - changed-files:
+      - any-glob-to-any-file: packaging/**
+user scripts:
+  - changed-files:
+      - any-glob-to-any-file: usr/**
