@@ -1,0 +1,1177 @@
+openapi: 3.0.3
+info:
+  title: Scout APM API
+  description: Scout APM API for accessing application performance monitoring data
+  version: "0.1"
+  contact:
+    name: Scout APM Support
+    url: https://www.scoutapm.com
+    email: support@scoutapm.com
+
+servers:
+  
+  - url: https://scoutapm.com/api/v0
+    description: Production API server
+  
+
+security:
+  - apiKeyHeader: []
+
+paths:
+  /apps:
+    get:
+      summary: List all applications
+      description: Returns a list of all applications accessible with the provided API key
+      operationId: listApps
+      tags:
+        - Applications
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /apps/{id}:
+    get:
+      summary: Get application details
+      description: Returns details for a specific application
+      operationId: getApp
+      tags:
+        - Applications
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppDetailResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /apps/{id}/metrics:
+    get:
+      summary: List available metrics
+      description: Returns a list of available metric types for the application
+      operationId: listMetrics
+      tags:
+        - Metrics
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /apps/{id}/metrics/{metric_type}:
+    get:
+      summary: Get metric data
+      description: Returns time-series data for a specific metric type
+      operationId: getMetric
+      tags:
+        - Metrics
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/MetricType'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricDataResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/endpoints:
+    get:
+      summary: List application endpoints
+      description: Returns a list of all endpoints for the application
+      operationId: listEndpoints
+      tags:
+        - Endpoints
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/endpoints/{endpoint}/metrics/{metric_type}:
+    get:
+      summary: Get endpoint metrics
+      description: Returns metric data for a specific endpoint
+      operationId: getEndpointMetrics
+      tags:
+        - Endpoints
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Endpoint'
+        - $ref: '#/components/parameters/MetricType'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricDataResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/endpoints/{endpoint}/traces:
+    get:
+      summary: List traces for endpoint
+      description: Returns traces for a specific endpoint (max 100, within 7 days)
+      operationId: listEndpointTraces
+      tags:
+        - Traces
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Endpoint'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracesListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/traces/{trace_id}:
+    get:
+      summary: Get trace details
+      description: Returns detailed information for a specific trace
+      operationId: getTrace
+      tags:
+        - Traces
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: trace_id
+          in: path
+          required: true
+          description: Trace identifier
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceDetailResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /apps/{id}/error_groups:
+    get:
+      summary: List error groups
+      description: Returns error groups for the application (max 100, within 30 days)
+      operationId: listErrorGroups
+      tags:
+        - Errors
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+        - name: endpoint
+          in: query
+          required: false
+          description: Base64 URL-encoded endpoint or job filter (e.g., Y29udHJvbGxlci9hY3Rpb24= [controller/action])
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorGroupsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/error_groups/{error_id}:
+    get:
+      summary: Get error group details
+      description: Returns details for a specific error group
+      operationId: getErrorGroup
+      tags:
+        - Errors
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: error_id
+          in: path
+          required: true
+          description: Error group identifier
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorGroupDetailResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/error_groups/{error_id}/errors:
+    get:
+      summary: Get errors in group
+      description: Returns individual errors within an error group (max 100)
+      operationId: getErrorGroupErrors
+      tags:
+        - Errors
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: error_id
+          in: path
+          required: true
+          description: Error group identifier
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/insights:
+    get:
+      summary: Get current insights
+      description: Returns all insight types for the application (cached for 5 minutes)
+      operationId: getAllInsights
+      tags:
+        - Insights
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of items per insight type
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /apps/{id}/insights/{type}:
+    get:
+      summary: Get current insights by type
+      description: Returns data for a specific insight type
+      operationId: getInsightByType
+      tags:
+        - Insights
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/InsightType'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of items
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightTypeResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /apps/{id}/insights/history:
+    get:
+      summary: Get insights history
+      description: Returns historical insights data with cursor-based pagination
+      operationId: getInsightsHistory
+      tags:
+        - Insights
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/ToTimestamp'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of items per page
+          schema:
+            type: integer
+            default: 10
+        - name: pagination_cursor
+          in: query
+          required: false
+          description: Cursor for pagination (insight ID)
+          schema:
+            type: integer
+        - name: pagination_direction
+          in: query
+          required: false
+          description: Pagination direction
+          schema:
+            type: string
+            enum: [forward, backward]
+            default: forward
+        - name: pagination_page
+          in: query
+          required: false
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightsHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/insights/history/{type}:
+    get:
+      summary: Get insights history by type
+      description: Returns historical insights data filtered by insight type with cursor-based pagination
+      operationId: getInsightsHistoryByType
+      tags:
+        - Insights
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/InsightType'
+        - $ref: '#/components/parameters/ToTimestamp'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of items per page
+          schema:
+            type: integer
+            default: 10
+        - name: pagination_cursor
+          in: query
+          required: false
+          description: Cursor for pagination (insight ID)
+          schema:
+            type: integer
+        - name: pagination_direction
+          in: query
+          required: false
+          description: Pagination direction
+          schema:
+            type: string
+            enum: [forward, backward]
+            default: forward
+        - name: pagination_page
+          in: query
+          required: false
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightsHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-SCOUT-API
+      description: API key provided in request header
+
+  parameters:
+    AppId:
+      name: id
+      in: path
+      required: true
+      description: Application identifier
+      schema:
+        type: integer
+        example: 1234
+
+    MetricType:
+      name: metric_type
+      in: path
+      required: true
+      description: Type of metric to retrieve
+      schema:
+        type: string
+        enum: [apdex, response_time, response_time_95th, errors, throughput, queue_time]
+
+    Endpoint:
+      name: endpoint
+      in: path
+      required: true
+      description: Base64 URL-encoded endpoint identifier (e.g., Y29udHJvbGxlci9hY3Rpb24= [controller/action])
+      schema:
+        type: string
+
+    FromTimestamp:
+      name: from
+      in: query
+      required: true
+      description: Start time in ISO 8601 format
+      schema:
+        type: string
+        format: date-time
+        example: 2026-02-09T14:55:29Z
+
+    ToTimestamp:
+      name: to
+      in: query
+      required: true
+      description: End time in ISO 8601 format
+      schema:
+        type: string
+        format: date-time
+        example: 2026-02-10T14:55:29Z
+    
+    InsightType:
+      name: type
+      in: path
+      required: true
+      description: Insight type
+      schema:
+        type: string
+        enum: [n_plus_one, memory_bloat, slow_query]
+
+  schemas:
+    StandardHeader:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            code:
+              type: integer
+              example: 200
+            message:
+              type: string
+              example: "OK"
+          required:
+            - code
+            - message
+        apiVersion:
+          type: string
+          example: "0.1"
+      required:
+        - status
+        - apiVersion
+
+    App:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1234
+        name:
+          type: string
+          example: "My Application"
+        last_reported_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - name
+
+    AppsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            apps:
+              type: array
+              items:
+                $ref: '#/components/schemas/App'
+          required:
+            - apps
+      required:
+        - header
+        - results
+
+    AppDetailResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            app:
+              $ref: '#/components/schemas/App'
+          required:
+            - app
+      required:
+        - header
+        - results
+
+    MetricsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            availableMetrics:
+              type: array
+              items:
+                type: string
+                enum: [apdex, response_time, response_time_95th, errors, throughput, queue_time]
+          required:
+            - availableMetrics
+      required:
+        - header
+        - results
+
+    MetricDataResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            summaries:
+              type: object
+              additionalProperties:
+                type: object
+                description: Summary statistics for the metric
+            series:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timestamp:
+                      type: string
+                      format: date-time
+                    value:
+                      type: number
+      required:
+        - header
+        - results
+
+    Endpoint:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "UsersController#index"
+        95th_percentile:
+          type: number
+          nullable: true
+        percentage_of_total: 
+          type: number
+        formatted_method_name:
+          type: string
+        throughput:
+          type: number
+        response_time:
+          type: number
+        error_rate:
+          type: number
+        max_allocations:
+          type: integer
+          nullable: true
+        link:
+          type: string
+          example: "/apps/1234/endpoints/UsersController"
+      required:
+        - name
+        - 95th_percentile
+        - max_allocations
+        - response_time
+        - formatted_method_name
+        - throughput
+        - error_rate
+        - link
+
+    EndpointsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Endpoint'
+      required:
+        - header
+        - results
+
+    Trace:
+      type: object
+      properties:
+        id:
+          type: integer
+        time:
+          type: string
+          format: date-time
+        total_call_time:
+          type: number
+        mem_delta:
+          type: number
+          nullable: true
+        metric_name:
+          type: string
+        uri:
+          type: string
+          nullable: true
+        context:
+          type: object
+          additionalProperties: true
+
+    TracesListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            traces:
+              type: array
+              items:
+                $ref: '#/components/schemas/Trace'
+          required:
+            - traces
+      required:
+        - header
+        - results
+
+    TraceDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        transaction_id:
+          type: string
+          nullable: true
+          description: Only present in v2 traces
+        hostname:
+          type: string
+          nullable: true
+          description: Only present in v2 traces
+        time:
+          type: string
+          format: date-time
+        total_call_time:
+          type: number
+        mem_delta:
+          type: number
+          nullable: true
+        metric_name:
+          type: string
+        uri:
+          type: string
+          nullable: true
+        context:
+          type: object
+          additionalProperties: true
+        git_sha:
+          type: string
+          nullable: true
+        allocations_count:
+          type: integer
+          nullable: true
+        limited:
+          type: boolean
+          description: Indicates if the trace was limited due too many spans
+        spans:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    TraceDetailResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            trace:
+              $ref: '#/components/schemas/TraceDetail'
+          required:
+            - trace
+      required:
+        - header
+        - results
+
+    ErrorGroup:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+        errors_count:
+          type: integer
+        last_error_at:
+          type: string
+          format: date-time
+        request_components:
+          type: array
+          items:
+            type: string
+        request_uri:
+          type: string
+          nullable: true
+        app_environment:
+          type: string
+          nullable: true
+
+    ErrorGroupsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            error_groups:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorGroup'
+          required:
+            - error_groups
+      required:
+        - header
+        - results
+  
+
+    ErrorGroupDetail:
+      allOf:
+        - $ref: '#/components/schemas/ErrorGroup'
+        - type: object
+          properties:
+            latest_error:
+              $ref: '#/components/schemas/Error'
+              type: object
+          required: [latest_error]
+
+    ErrorGroupDetailResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            error_group:
+              $ref: '#/components/schemas/ErrorGroupDetail'
+          required:
+            - error_group
+      required:
+        - header
+        - results
+
+    Error:
+      type: object
+      properties:
+        id:
+          type: integer
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        request_params:
+          type: object
+          additionalProperties: true
+          nullable: true
+        request_uri:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        request_session:
+          type: object
+          additionalProperties: true
+          nullable: true
+        trace:
+          type: array
+          items:
+            type: string
+        context:
+          type: object
+          additionalProperties: true
+
+    ErrorsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            errors:
+              type: array
+              items:
+                $ref: '#/components/schemas/Error'
+          required:
+            - errors
+      required:
+        - header
+        - results
+
+    InsightTimeframe:
+      type: object
+      properties:
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+      required:
+        - start_time
+        - end_time
+        - duration_minutes
+
+    InsightSummary:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Total number of insights
+        new_count:
+          type: integer
+          description: Number of new insights
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required:
+        - count
+        - new_count
+        - items
+
+    InsightsResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            timeframe:
+              $ref: '#/components/schemas/InsightTimeframe'
+            insights:
+              type: object
+              properties:
+                n_plus_one:
+                  $ref: '#/components/schemas/InsightSummary'
+                memory_bloat:
+                  $ref: '#/components/schemas/InsightSummary'
+                slow_query:
+                  $ref: '#/components/schemas/InsightSummary'
+          required:
+            - timeframe
+            - insights
+      required:
+        - header
+        - results
+
+    InsightTypeResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            timeframe:
+              $ref: '#/components/schemas/InsightTimeframe'
+            total_count:
+              type: integer
+              description: Total number of insights
+            insight_type:
+              type: string
+              enum: [n_plus_one, memory_bloat, slow_query]
+            new_count:
+              type: integer
+              description: Number of new insights
+            items:
+              type: object
+              additionalProperties: true
+          required:
+            - timeframe
+            - items
+            - total_count
+            - insight_type
+            - new_count
+      required:
+        - header
+        - results
+
+    InsightHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique insight identifier
+        insight_type:
+          type: string
+          description: Type of insight
+          enum: [n_plus_one, memory_bloat, slow_query]
+        first_seen_at:
+          type: string
+          format: date-time
+          description: When the insight was first detected
+        metric_name:
+          type: string
+          description: Name of the associated metric
+        trace:
+          $ref: '#/components/schemas/TraceDetail'
+        fields:
+          type: object
+          additionalProperties: true
+          description: Additional insight-specific data
+      required:
+        - id
+        - first_seen_at
+        - insight_type
+        - metric_name
+        - fields
+
+    InsightHistoryPagination:
+      type: object
+      properties:
+        has_more:
+          type: boolean
+          description: Whether more results are available
+        pagination_cursor:
+          type: integer
+          nullable: true
+          description: Cursor for next page of results
+        next_pagination_page:
+          type: integer
+          nullable: true
+          description: Next page number
+      required:
+        - has_more
+
+    InsightsHistoryResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            total_count:
+              type: integer
+              description: Total number of insights
+            insights:
+              type: array
+              items:
+                $ref: '#/components/schemas/InsightHistory'
+              description: List of historical insights
+            pagination:
+              $ref: '#/components/schemas/InsightHistoryPagination'
+          required:
+            - total_count
+            - insights
+            - pagination
+      required:
+        - header
+        - results
+
+  responses:
+    Forbidden:
+      description: Forbidden - Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              header:
+                type: object
+                properties:
+                  status:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 403
+                      message:
+                        type: string
+                        example: "Forbidden, check your API key"
+                  apiVersion:
+                    type: string
+                    example: "0.1"
+              results:
+                type: object
+                example: {}
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              header:
+                type: object
+                properties:
+                  status:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 404
+                      message:
+                        type: string
+                        example: "Record Not Found"
+                  apiVersion:
+                    type: string
+                    example: "0.1"
+              results:
+                type: object
+                example: {}
+
+    UnprocessableEntity:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              header:
+                type: object
+                properties:
+                  status:
+                    type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 422
+                      message:
+                        type: string
+                        example: "Invalid timeframe parameters"
+                  apiVersion:
+                    type: string
+                    example: "0.1"
+              results:
+                type: object
+                example: {}
+
+tags:
+  - name: Applications
+    description: Operations related to applications
+  - name: Metrics
+    description: Operations for retrieving application metrics
+  - name: Endpoints
+    description: Operations for endpoint monitoring
+  - name: Traces
+    description: Operations for trace analysis
+  - name: Errors
+    description: Operations for error monitoring
+  - name: Insights
+    description: Operations for performance insights

@@ -1,0 +1,31 @@
+# AUR package: scout-cli
+# Maintainer: Your Name <your@email>
+# Submit to AUR and users install with: yay -S scout-cli
+
+pkgname=scout-cli
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors"
+arch=('x86_64' 'aarch64' 'i686')
+url="https://github.com/amkisko/scout-cli.rs"
+license=('MIT')
+depends=('gcc-libs' 'openssl')
+makedepends=('cargo' 'git')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('')  # updpkgsums
+
+prepare() {
+  cd "$srcdir/scout-cli.rs-$pkgver"
+  cargo fetch --locked
+}
+
+build() {
+  cd "$srcdir/scout-cli.rs-$pkgver"
+  cargo build --release -p scout
+}
+
+package() {
+  cd "$srcdir/scout-cli.rs-$pkgver"
+  install -Dm755 "target/release/scout" "$pkgdir/usr/bin/scout"
+  install -Dm644 LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

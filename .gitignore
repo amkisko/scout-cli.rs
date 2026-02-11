@@ -1,0 +1,6 @@
+/target
+# Cargo.lock is committed for the CLI binary for reproducible installs
+*.rs.bk
+.env
+.env.*
+!.env.example

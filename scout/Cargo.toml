@@ -1,0 +1,23 @@
+[package]
+name = "scout"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "ScoutAPM CLI - query apps, endpoints, traces, and metrics"
+
+[[bin]]
+name = "scout"
+path = "src/main.rs"
+
+[dependencies]
+scout_lib = { path = "../scout_lib" }
+clap = { version = "4.4", features = ["derive", "env"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+ratatui = "0.26"
+crossterm = "0.27"
