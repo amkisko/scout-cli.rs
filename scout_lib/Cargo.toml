@@ -22,3 +22,4 @@ url = "2.5"
 urlencoding = "2.1"
 
 [dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

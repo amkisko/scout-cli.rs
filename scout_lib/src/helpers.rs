@@ -205,6 +205,17 @@ mod tests {
         assert_eq!(parse_range("30min").unwrap(), 30 * 60);
         assert_eq!(parse_range("1day").unwrap(), 86400);
         assert_eq!(parse_range("7days").unwrap(), 7 * 86400);
+        assert_eq!(parse_range("2 hours").unwrap(), 2 * 3600);
+        assert_eq!(parse_range("1hour").unwrap(), 3600);
+        assert_eq!(parse_range("1hr").unwrap(), 3600);
+    }
+
+    #[test]
+    fn test_parse_range_errors() {
+        assert!(parse_range("").is_err());
+        assert!(parse_range("min").is_err());
+        assert!(parse_range("7").is_err());
+        assert!(parse_range("7weeks").is_err());
     }
 
     #[test]
@@ -214,5 +225,119 @@ mod tests {
         assert_eq!(p.url_type, ScoutUrlType::Trace);
         assert_eq!(p.app_id, Some(123));
         assert_eq!(p.trace_id, Some(456));
+        assert_eq!(p.endpoint_id.as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn test_parse_scout_url_app() {
+        let p = parse_scout_url("https://scoutapm.com/apps/42").unwrap();
+        assert_eq!(p.url_type, ScoutUrlType::App);
+        assert_eq!(p.app_id, Some(42));
+        assert_eq!(p.endpoint_id, None);
+    }
+
+    #[test]
+    fn test_parse_scout_url_endpoint() {
+        let p = parse_scout_url("https://scoutapm.com/apps/1/endpoints/MTIzL2Zvby9iYXI=").unwrap();
+        assert_eq!(p.url_type, ScoutUrlType::Endpoint);
+        assert_eq!(p.app_id, Some(1));
+        assert_eq!(p.endpoint_id.as_deref(), Some("MTIzL2Zvby9iYXI="));
+    }
+
+    #[test]
+    fn test_parse_scout_url_error_group() {
+        let p = parse_scout_url("https://scoutapm.com/apps/10/error_groups/789").unwrap();
+        assert_eq!(p.url_type, ScoutUrlType::ErrorGroup);
+        assert_eq!(p.app_id, Some(10));
+        assert_eq!(p.error_id, Some(789));
+    }
+
+    #[test]
+    fn test_parse_scout_url_insight() {
+        let p = parse_scout_url("https://scoutapm.com/apps/5/insights/n_plus_one").unwrap();
+        assert_eq!(p.url_type, ScoutUrlType::Insight);
+        assert_eq!(p.app_id, Some(5));
+        assert_eq!(p.insight_type.as_deref(), Some("n_plus_one"));
+    }
+
+    #[test]
+    fn test_parse_scout_url_invalid() {
+        assert!(parse_scout_url("not-a-url").is_err());
+    }
+
+    #[test]
+    fn test_decode_endpoint_id() {
+        // base64url "foo/bar" -> "Zm9vL2Jhcg"
+        let decoded = decode_endpoint_id("Zm9vL2Jhcg").unwrap();
+        assert_eq!(decoded, "foo/bar");
+    }
+
+    #[test]
+    fn test_decode_endpoint_id_standard_base64() {
+        let decoded = decode_endpoint_id("Zm9v").unwrap();
+        assert_eq!(decoded, "foo");
+    }
+
+    #[test]
+    fn test_decode_endpoint_id_invalid() {
+        assert!(decode_endpoint_id("!!!").is_err());
+    }
+
+    #[test]
+    fn test_parse_time() {
+        let t = parse_time("2025-01-15T12:00:00Z").unwrap();
+        assert_eq!(t.format("%Y-%m-%d").to_string(), "2025-01-15");
+        assert_eq!(t.format("%H:%M").to_string(), "12:00");
+        let t2 = parse_time("2025-01-15T12:00:00z").unwrap();
+        assert_eq!(t2, t);
+    }
+
+    #[test]
+    fn test_parse_time_invalid() {
+        assert!(parse_time("not-a-date").is_err());
+    }
+
+    #[test]
+    fn test_format_time() {
+        let t = parse_time("2025-01-15T12:00:00Z").unwrap();
+        assert_eq!(format_time(t), "2025-01-15T12:00:00Z");
+    }
+
+    #[test]
+    fn test_format_timestamp_display_utc() {
+        let s = format_timestamp_display("2025-01-15T12:00:00Z", true);
+        assert!(s.contains("UTC"));
+        assert!(s.contains("2025-01-15"));
+    }
+
+    #[test]
+    fn test_format_timestamp_display_local() {
+        let s = format_timestamp_display("2025-01-15T12:00:00Z", false);
+        assert!(!s.is_empty());
+        assert!(s.contains("2025-01-15"));
+    }
+
+    #[test]
+    fn test_format_timestamp_display_invalid_returns_unchanged() {
+        let bad = "not-a-timestamp";
+        assert_eq!(format_timestamp_display(bad, true), bad);
+        assert_eq!(format_timestamp_display(bad, false), bad);
+    }
+
+    #[test]
+    fn test_calculate_range() {
+        let (from, to) = calculate_range("1day", Some("2025-01-15T12:00:00Z")).unwrap();
+        assert_eq!(to, "2025-01-15T12:00:00Z");
+        let from_t = parse_time(&from).unwrap();
+        let to_t = parse_time(&to).unwrap();
+        assert_eq!((to_t - from_t).num_seconds(), 86400);
+    }
+
+    #[test]
+    fn test_calculate_range_to_now() {
+        let (from, to) = calculate_range("30min", None).unwrap();
+        let to_t = parse_time(&to).unwrap();
+        let from_t = parse_time(&from).unwrap();
+        assert!((to_t - from_t).num_seconds().abs_diff(30 * 60) < 2);
     }
 }
