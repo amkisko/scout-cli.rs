@@ -74,8 +74,7 @@ fn filtered_app_indices(apps: &[Value], query: &str) -> Vec<usize> {
     if q.is_empty() {
         return (0..apps.len()).collect();
     }
-    apps
-        .iter()
+    apps.iter()
         .enumerate()
         .filter(|(_, app)| {
             let name = app
@@ -849,9 +848,7 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                     }
                     KeyCode::Char(c) => {
                         // Only add to search when on app list; leave q/h/j/k/l for quit and navigation
-                        if current_app.is_none()
-                            && !['q', 'h', 'j', 'k', 'l'].contains(&c)
-                        {
+                        if current_app.is_none() && !['q', 'h', 'j', 'k', 'l'].contains(&c) {
                             app_search_pending.push(c);
                             app_search_last_typed = Some(Instant::now());
                         }
