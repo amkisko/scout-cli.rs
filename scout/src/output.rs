@@ -138,3 +138,80 @@ pub fn format_json(value: &Value) -> Result<String, serde_json::Error> {
 pub fn format_json_compact(value: &Value) -> Result<String, serde_json::Error> {
     serde_json::to_string(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_format_from_str() {
+        assert_eq!(
+            "plain".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Plain
+        );
+        assert_eq!("json".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+        assert_eq!(
+            "Plain".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Plain
+        );
+        assert_eq!("JSON".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+        assert_eq!("p".parse::<OutputFormat>().unwrap(), OutputFormat::Plain);
+        assert_eq!("j".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+        assert_eq!("text".parse::<OutputFormat>().unwrap(), OutputFormat::Plain);
+        assert!("xml".parse::<OutputFormat>().is_err());
+    }
+
+    #[test]
+    fn format_plain_null() {
+        assert!(format_plain(&Value::Null).contains("null"));
+    }
+
+    #[test]
+    fn format_plain_bool_and_number() {
+        assert!(format_plain(&Value::Bool(true)).contains("true"));
+        assert!(format_plain(&Value::Number(42i64.into())).contains("42"));
+    }
+
+    #[test]
+    fn format_plain_string() {
+        assert!(format_plain(&Value::String("hello".to_string())).contains("hello"));
+    }
+
+    #[test]
+    fn format_plain_empty_array() {
+        let out = format_plain(&Value::Array(vec![]));
+        assert!(out.contains("empty"));
+    }
+
+    #[test]
+    fn format_plain_object() {
+        let v = serde_json::json!({"name": "scout", "count": 1});
+        let out = format_plain(&v);
+        assert!(out.contains("name"));
+        assert!(out.contains("scout"));
+        assert!(out.contains("count"));
+    }
+
+    #[test]
+    fn format_plain_array_of_objects() {
+        let v = serde_json::json!([
+            {"id": 1, "name": "a"},
+            {"id": 2, "name": "b"}
+        ]);
+        let out = format_plain(&v);
+        assert!(out.contains("id"));
+        assert!(out.contains("name"));
+        assert!(out.contains("1"));
+        assert!(out.contains("2"));
+        assert!(out.contains("a"));
+        assert!(out.contains("b"));
+    }
+
+    #[test]
+    fn format_json_roundtrip() {
+        let v = serde_json::json!({"x": 1, "y": [2, 3]});
+        let s = format_json(&v).unwrap();
+        let parsed: Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(parsed, v);
+    }
+}

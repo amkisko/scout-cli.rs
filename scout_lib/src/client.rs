@@ -541,3 +541,71 @@ fn validate_time_range(from: &str, to: &str) -> Result<(), Error> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_new() {
+        let c = Client::new("test-key".to_string());
+        assert!(!c.api_key.is_empty());
+        assert_eq!(c.api_key, "test-key");
+    }
+
+    #[tokio::test]
+    async fn get_metric_invalid_type() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_metric(1, "invalid_metric", None, None, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("Invalid metric_type"));
+    }
+
+    #[tokio::test]
+    async fn get_metric_from_after_to() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_metric(
+                1,
+                "response_time",
+                Some("2025-01-02T00:00:00Z"),
+                Some("2025-01-01T00:00:00Z"),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("from_time must be before to_time"));
+    }
+
+    #[tokio::test]
+    async fn get_metric_range_exceeds_2_weeks() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_metric(
+                1,
+                "response_time",
+                Some("2025-01-01T00:00:00Z"),
+                Some("2025-01-20T00:00:00Z"),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("2 weeks"));
+    }
+
+    #[tokio::test]
+    async fn get_insight_by_type_invalid() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_insight_by_type(1, "invalid_insight", None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("Invalid insight_type"));
+    }
+}

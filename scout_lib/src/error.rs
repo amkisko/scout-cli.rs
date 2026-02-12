@@ -44,3 +44,48 @@ impl ApiError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_error_new() {
+        let e = ApiError::new("bad request", Some(400), None);
+        assert_eq!(e.message, "bad request");
+        assert_eq!(e.status_code, Some(400));
+        assert!(e.response_data.is_none());
+    }
+
+    #[test]
+    fn api_error_display() {
+        let e = ApiError::new("not found", Some(404), None);
+        assert_eq!(e.to_string(), "not found");
+    }
+
+    #[test]
+    fn auth_error_display() {
+        let e = AuthError {
+            message: "invalid key".to_string(),
+        };
+        assert_eq!(e.to_string(), "invalid key");
+    }
+
+    #[test]
+    fn error_from_auth() {
+        let auth = AuthError {
+            message: "unauthorized".to_string(),
+        };
+        let e: Error = auth.into();
+        assert!(matches!(e, Error::Auth(_)));
+        assert!(e.to_string().contains("Authentication failed"));
+    }
+
+    #[test]
+    fn error_from_api() {
+        let api = ApiError::new("server error", Some(500), None);
+        let e: Error = api.into();
+        assert!(matches!(e, Error::Api(_)));
+        assert!(e.to_string().contains("API error"));
+    }
+}
