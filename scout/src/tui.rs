@@ -1,18 +1,26 @@
 //! Interactive TUI: app-scoped view with breadcrumbs and tabs (Endpoints, Insights, Metrics, Errors).
 
 use ratatui::{
+    layout::Alignment,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
-    Frame,
+    text::Line,
+    widgets::{Bar, BarChart, Block, Borders, List, ListItem, ListState, Paragraph, Tabs},
+    Frame, Terminal,
 };
 use scout_lib::{format_timestamp_display, helpers::calculate_range, Client};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::time::Instant;
+use tokio::task::JoinHandle;
 use tokio::runtime::Runtime;
+use crossterm::{
+    cursor::{Hide, Show},
+    event::{self, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 
 /// TUI options (from --app, --tab, --refresh, --utc).
 #[derive(Clone)]
@@ -38,12 +46,8 @@ struct TerminalGuard;
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = crossterm::execute!(
-            io::stdout(),
-            crossterm::terminal::LeaveAlternateScreen,
-            crossterm::cursor::Show
-        );
-        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
+        let _ = disable_raw_mode();
     }
 }
 
@@ -52,6 +56,13 @@ impl Drop for TerminalGuard {
 pub enum DrillContent {
     Preformatted(String),
     MetricSeries(Value),
+}
+
+enum TabPayload {
+    Endpoints(Vec<(String, Value)>),
+    Insights(Vec<(String, Value)>),
+    Metrics(Vec<String>),
+    Errors(Vec<Value>),
 }
 
 impl Tab {
@@ -290,86 +301,132 @@ fn metric_unit(metric_type: &str) -> &'static str {
     }
 }
 
-/// Format metric series as a table and optional ASCII sparkline. `content_width` is the terminal content area width; `use_utc` forces UTC else local TZ. Sorted by time desc (latest on top). `metric_type` is used for the value column unit (e.g. "Value (ms)").
-fn format_metric_series(
+fn downsample_points(points: &[(String, f64)], max_count: usize) -> Vec<(String, f64)> {
+    if points.len() <= max_count {
+        return points.to_vec();
+    }
+    let step = points.len() as f64 / max_count as f64;
+    (0..max_count)
+        .map(|i| {
+            let idx = ((i as f64 * step).floor() as usize).min(points.len() - 1);
+            points[idx].clone()
+        })
+        .collect()
+}
+
+fn compact_time_label(ts: &str, use_utc: bool) -> String {
+    let display = format_timestamp_display(ts, use_utc);
+    let chars: Vec<char> = display.chars().collect();
+    if chars.len() > 5 {
+        chars[chars.len() - 5..].iter().collect()
+    } else {
+        display
+    }
+}
+
+fn render_metric_chart(
+    f: &mut Frame,
+    content_area: ratatui::layout::Rect,
     v: &Value,
-    content_width: usize,
     use_utc: bool,
     metric_type: Option<&str>,
-) -> String {
+) {
     let mut points: Vec<(String, f64)> = Vec::new();
     collect_series_points(v, &mut points);
-    points.sort_by(|a, b| b.0.cmp(&a.0)); // desc by time (latest first)
+    points.sort_by(|a, b| a.0.cmp(&b.0)); // asc by time (oldest -> newest)
+
     if points.is_empty() {
-        return "  No time-series points in response.\n  (Raw structure may differ; check API docs.)".to_string();
+        let empty = Paragraph::new("No time-series points in response.")
+            .block(
+                Block::default()
+                    .title(" Metric chart ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .style(Style::default().fg(Color::White));
+        f.render_widget(empty, content_area);
+        return;
     }
-    let mut out = String::new();
-    let vals: Vec<f64> = points.iter().map(|(_, v)| *v).collect();
-    let (min_v, max_v) = vals
+
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(6), Constraint::Length(2)])
+        .split(content_area);
+    let chart_area = vertical[0];
+    let meta_area = vertical[1];
+
+    let inner_w = chart_area.width.saturating_sub(2) as usize;
+    let target_bars = (inner_w / 4).clamp(1, 32);
+    let sampled = downsample_points(&points, target_bars);
+    let max_v = sampled
         .iter()
-        .cloned()
-        .fold((f64::MAX, f64::MIN), |(a, b), x| (a.min(x), b.max(x)));
-    let range = max_v - min_v;
-    let spark_width = content_width.saturating_sub(4).clamp(10, 80);
-    if range > 0.0 && points.len() > 1 {
-        let spark: String = vals
-            .iter()
-            .map(|&v| {
-                let i = ((v - min_v) / range * (spark_width - 1) as f64).round() as usize;
-                let i = i.min(spark_width - 1);
-                "▁▂▃▄▅▆▇█"
-                    .chars()
-                    .nth((i * 8) / spark_width.max(1))
-                    .unwrap_or('·')
-            })
-            .collect();
-        out.push_str(&format!(
-            "  Sparkline ({} pts):\n  {}\n\n",
-            points.len(),
-            spark
-        ));
-    }
-    let time_w = (content_width / 2).saturating_sub(4).max(10);
-    let sep = "  ";
-    let time_header = if use_utc {
-        "Time (UTC)"
+        .map(|(_, v)| *v)
+        .fold(0.0_f64, |a, b| a.max(b))
+        .max(1.0);
+    let min_v = sampled
+        .iter()
+        .map(|(_, v)| *v)
+        .fold(f64::MAX, |a, b| a.min(b));
+    let latest_v = sampled.last().map(|(_, v)| *v).unwrap_or(0.0);
+
+    let bar_width = if target_bars >= 24 {
+        1
+    } else if target_bars >= 12 {
+        2
     } else {
-        "Time (local)"
+        3
     };
+
+    let bars: Vec<Bar> = sampled
+        .iter()
+        .map(|(ts, val)| {
+            let scaled = ((*val / max_v) * 100.0).round().clamp(0.0, 100.0) as u64;
+            Bar::with_label(compact_time_label(ts, use_utc), scaled)
+                .style(Color::Cyan)
+                .value_style((Color::Black, Color::Cyan))
+                .text_value(format!("{:.1}", val))
+        })
+        .collect();
+
+    let title = if let Some(mt) = metric_type {
+        format!(" {} chart ", mt)
+    } else {
+        " Metric chart ".to_string()
+    };
+    let chart = BarChart::vertical(bars)
+        .bar_width(bar_width)
+        .bar_gap(1)
+        .max(100)
+        .block(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+    f.render_widget(chart, chart_area);
+
     let unit = metric_type.map(metric_unit).unwrap_or("");
-    let value_header = if unit.is_empty() {
-        "Value".to_string()
+    let suffix = if unit.is_empty() {
+        "".to_string()
     } else {
-        format!("Value ({})", unit)
+        format!(" {}", unit)
     };
-    out.push_str(&format!(
-        "  {:<time_w$}  {}\n  ",
-        time_header,
-        value_header,
-        time_w = time_w
-    ));
-    out.push_str(&"-".repeat(content_width.saturating_sub(2).max(10)));
-    out.push('\n');
-    for (ts, val) in points.iter().take(30) {
-        let t = format_timestamp_display(ts, use_utc);
-        let t = if t.len() > time_w {
-            format!("…{}", &t[t.len().saturating_sub(time_w - 1)..])
-        } else {
-            t
-        };
-        let val_str = format!("{:.2}", val);
-        out.push_str(&format!(
-            "  {:<time_w$}{}{}\n",
-            t,
-            sep,
-            val_str,
-            time_w = time_w
-        ));
-    }
-    if points.len() > 30 {
-        out.push_str(&format!("  … and {} more\n", points.len() - 30));
-    }
-    out
+    let meta = format!(
+        "latest: {:.2}{}  min: {:.2}{}  max: {:.2}{}  points: {}",
+        latest_v,
+        suffix,
+        min_v,
+        suffix,
+        max_v,
+        suffix,
+        points.len()
+    );
+    let meta_widget = Paragraph::new(meta).block(
+        Block::default()
+            .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    f.render_widget(meta_widget, meta_area);
 }
 
 /// Extract a sortable time string from a Value (ISO 8601 or similar). Tries common field names.
@@ -448,13 +505,11 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
     let apps: Vec<Value> = client.list_apps(None).await.map_err(|e| e.to_string())?;
 
     let client = client.clone();
-    crossterm::terminal::enable_raw_mode().map_err(|e| e.to_string())?;
-    crossterm::execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen)
-        .map_err(|e| e.to_string())?;
+    enable_raw_mode().map_err(|e| e.to_string())?;
+    execute!(io::stdout(), EnterAlternateScreen, Hide).map_err(|e| e.to_string())?;
     let _guard = TerminalGuard;
     let mut terminal =
-        ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout()))
-            .map_err(|e| e.to_string())?;
+        Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout())).map_err(|e| e.to_string())?;
 
     // If no --app, we need to show app picker first. Otherwise resolve app and go to app view.
     let mut current_app: Option<(u64, String)> = opts
@@ -478,55 +533,82 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
     let mut selected = 0usize;
     let mut drill: Option<DrillContent> = None; // detail view content (metric series formatted at draw time with width)
     let mut drill_label: Option<String> = None; // extra breadcrumb segment
-    let mut loading_msg: Option<String> = None; // "Loading endpoints…" etc.
     let mut loaded_tabs: HashSet<(u64, Tab)> = HashSet::new(); // skip reload when switching back to a tab
+    let mut tab_errors: HashMap<(u64, Tab), String> = HashMap::new();
+    let mut pending_tab_loads: HashMap<(u64, Tab), JoinHandle<Result<TabPayload, String>>> =
+        HashMap::new();
+    let mut pending_metric_load: Option<(u64, String, JoinHandle<Result<Value, String>>)> = None;
     let refresh_secs = opts.refresh_secs;
     let mut last_refresh = Instant::now();
+    let spinner_started = Instant::now();
     let poll_timeout = std::time::Duration::from_millis(100);
     let search_debounce = std::time::Duration::from_millis(200);
     let mut app_search_pending = String::new();
     let mut app_search_committed = String::new();
     let mut app_search_last_typed: Option<Instant> = None;
 
-    // If we have an app from --app, load default tab (Endpoints) immediately.
+    // If we have an app from --app, start loading initial tab in background.
     if let Some((app_id, _)) = current_app {
-        loading_msg = Some(format!("Loading {}…", tab.as_str().to_lowercase()));
-        let (bc, tab_names, list_items, content_title, detail_text) = build_ui_state(
-            current_app.as_ref(),
-            &breadcrumb,
-            tab,
-            &tab_data,
-            &app_list,
-            app_search_committed.as_str(),
-            app_selected,
-            selected,
-            drill_label.as_deref(),
-            loading_msg.as_deref(),
-            drill.is_some(),
-        );
-        terminal
-            .draw(|f| {
-                draw_ui(
-                    f,
-                    &bc,
-                    tab,
-                    &tab_names,
-                    list_items,
-                    content_title,
-                    detail_text.as_deref(),
-                    drill.as_ref(),
-                    refresh_secs,
-                    opts.use_utc,
-                );
-            })
-            .map_err(|e| e.to_string())?;
-        load_tab(&client, app_id, tab, &mut tab_data).await?;
-        loaded_tabs.insert((app_id, tab));
-        loading_msg = None;
-        selected = selected.min(tab_data.list_len(tab).saturating_sub(1));
+        start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
     }
 
     loop {
+        // Apply completed tab loads.
+        let finished_tab_keys: Vec<(u64, Tab)> = pending_tab_loads
+            .iter()
+            .filter_map(|(k, h)| if h.is_finished() { Some(*k) } else { None })
+            .collect();
+        for key in finished_tab_keys {
+            if let Some(handle) = pending_tab_loads.remove(&key) {
+                match handle.await {
+                    Ok(Ok(payload)) => {
+                        let is_current_app =
+                            current_app.as_ref().map(|(id, _)| *id) == Some(key.0);
+                        if is_current_app {
+                            apply_tab_payload(&mut tab_data, key.1, payload);
+                            loaded_tabs.insert(key);
+                            tab_errors.remove(&key);
+                            if key.1 == tab {
+                                selected = selected.min(tab_data.list_len(tab).saturating_sub(1));
+                            }
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        if current_app.as_ref().map(|(id, _)| *id) == Some(key.0) {
+                            tab_errors.insert(key, e);
+                        }
+                    }
+                    Err(e) => {
+                        if current_app.as_ref().map(|(id, _)| *id) == Some(key.0) {
+                            tab_errors.insert(key, e.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply completed metric drill load.
+        if pending_metric_load
+            .as_ref()
+            .map(|(_, _, h)| h.is_finished())
+            .unwrap_or(false)
+        {
+            if let Some((_, metric_name, handle)) = pending_metric_load.take() {
+                match handle.await {
+                    Ok(Ok(v)) => drill = Some(DrillContent::MetricSeries(v)),
+                    Ok(Err(e)) => {
+                        drill = Some(DrillContent::Preformatted(format!("Error: {}", e)));
+                    }
+                    Err(e) => {
+                        drill = Some(DrillContent::Preformatted(format!("Error: {}", e)));
+                    }
+                }
+                if drill_label.is_none() {
+                    drill_label = Some(metric_name);
+                }
+            }
+        }
+
         // Apply search debounce when on project list: commit pending query after idle
         if current_app.is_none()
             && app_search_pending != app_search_committed
@@ -538,6 +620,47 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
             let len = filtered_app_indices(&app_list, &app_search_committed).len();
             app_selected = app_selected.min(len.saturating_sub(1));
         }
+
+        let loading_msg = if let Some((app_id, _)) = current_app {
+            if let Some((metric_app_id, metric_name, _)) = pending_metric_load.as_ref() {
+                if *metric_app_id == app_id {
+                    Some(format!("Loading metric {}…", metric_name))
+                } else {
+                    None
+                }
+            } else if pending_tab_loads.contains_key(&(app_id, tab))
+                && tab_data.list_len(tab) == 0
+                && drill.is_none()
+            {
+                Some(format!("Loading {}…", tab.as_str().to_lowercase()))
+            } else if tab_data.list_len(tab) == 0 && drill.is_none() {
+                tab_errors.get(&(app_id, tab)).map(|e| format!("Error: {}", e))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Safety net: if current tab was not kicked off by a keypath, start it here.
+        if let Some((app_id, _)) = current_app {
+            if !loaded_tabs.contains(&(app_id, tab))
+                && !pending_tab_loads.contains_key(&(app_id, tab))
+                && pending_metric_load.is_none()
+            {
+                start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
+            }
+        }
+
+        let pending_count = pending_tab_loads.len() + usize::from(pending_metric_load.is_some());
+        let loading_indicator = if pending_count > 0 {
+            let frames = ["◐", "◓", "◑", "◒"];
+            let idx =
+                ((spinner_started.elapsed().as_millis() / 140) % frames.len() as u128) as usize;
+            Some(format!("{} {}", frames[idx], pending_count))
+        } else {
+            None
+        };
 
         let (bc, tab_names, list_items, content_title, detail_text) = build_ui_state(
             current_app.as_ref(),
@@ -562,6 +685,12 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                     tab,
                     &tab_names,
                     list_items,
+                    if current_app.is_none() {
+                        Some(app_selected)
+                    } else {
+                        Some(selected)
+                    },
+                    loading_indicator.as_deref(),
                     content_title,
                     detail_text.as_deref(),
                     drill.as_ref(),
@@ -575,11 +704,8 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
             && current_app.is_some()
             && last_refresh.elapsed() >= std::time::Duration::from_secs(refresh_secs);
 
-        if crossterm::event::poll(poll_timeout).map_err(|e| e.to_string())? {
-            if let crossterm::event::Event::Key(k) =
-                crossterm::event::read().map_err(|e| e.to_string())?
-            {
-                use crossterm::event::KeyCode;
+        if event::poll(poll_timeout).map_err(|e| e.to_string())? {
+            if let Event::Key(k) = event::read().map_err(|e| e.to_string())? {
                 match k.code {
                     KeyCode::Char('q') => break,
                     KeyCode::Esc => {
@@ -588,6 +714,15 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                             drill_label = None;
                         } else if current_app.is_some() {
                             // Back to project list
+                            if let Some((_, _, h)) = pending_metric_load.take() {
+                                h.abort();
+                            }
+                            for (_, h) in pending_tab_loads.drain() {
+                                h.abort();
+                            }
+                            tab_data = TabData::default();
+                            loaded_tabs.clear();
+                            tab_errors.clear();
                             current_app = None;
                             breadcrumb = vec!["Select app".to_string()];
                             tab = Tab::Endpoints;
@@ -598,9 +733,7 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                         }
                     }
                     KeyCode::Left | KeyCode::Char('h') => {
-                        if loading_msg.is_some() {
-                            // ignore while loading
-                        } else if drill.is_some() {
+                        if drill.is_some() {
                             drill = None;
                             drill_label = None;
                         } else if current_app.is_some() {
@@ -609,51 +742,17 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                             let next = if i == 0 { tabs.len() - 1 } else { i - 1 };
                             tab = tabs[next];
                             if let Some((app_id, _)) = current_app {
-                                if !loaded_tabs.contains(&(app_id, tab)) {
-                                    loading_msg =
-                                        Some(format!("Loading {}…", tab.as_str().to_lowercase()));
-                                    let (bc, tab_names, list_items, content_title, detail_text) =
-                                        build_ui_state(
-                                            current_app.as_ref(),
-                                            &breadcrumb,
-                                            tab,
-                                            &tab_data,
-                                            &app_list,
-                                            app_search_committed.as_str(),
-                                            app_selected,
-                                            selected,
-                                            drill_label.as_deref(),
-                                            loading_msg.as_deref(),
-                                            drill.is_some(),
-                                        );
-                                    terminal
-                                        .draw(|f| {
-                                            draw_ui(
-                                                f,
-                                                &bc,
-                                                tab,
-                                                &tab_names,
-                                                list_items,
-                                                content_title,
-                                                detail_text.as_deref(),
-                                                drill.as_ref(),
-                                                refresh_secs,
-                                                opts.use_utc,
-                                            );
-                                        })
-                                        .map_err(|e| e.to_string())?;
-                                    load_tab(&client, app_id, tab, &mut tab_data).await?;
-                                    loaded_tabs.insert((app_id, tab));
-                                    loading_msg = None;
+                                if !loaded_tabs.contains(&(app_id, tab))
+                                    && !pending_tab_loads.contains_key(&(app_id, tab))
+                                {
+                                    start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
                                 }
                             }
                             selected = 0;
                         }
                     }
                     KeyCode::Right | KeyCode::Char('l') => {
-                        if loading_msg.is_some() {
-                            // ignore while loading
-                        } else if drill.is_some() {
+                        if drill.is_some() {
                             drill = None;
                             drill_label = None;
                         } else if current_app.is_some() {
@@ -662,42 +761,10 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                             let next = (i + 1) % tabs.len();
                             tab = tabs[next];
                             if let Some((app_id, _)) = current_app {
-                                if !loaded_tabs.contains(&(app_id, tab)) {
-                                    loading_msg =
-                                        Some(format!("Loading {}…", tab.as_str().to_lowercase()));
-                                    let (bc, tab_names, list_items, content_title, detail_text) =
-                                        build_ui_state(
-                                            current_app.as_ref(),
-                                            &breadcrumb,
-                                            tab,
-                                            &tab_data,
-                                            &app_list,
-                                            app_search_committed.as_str(),
-                                            app_selected,
-                                            selected,
-                                            drill_label.as_deref(),
-                                            loading_msg.as_deref(),
-                                            drill.is_some(),
-                                        );
-                                    terminal
-                                        .draw(|f| {
-                                            draw_ui(
-                                                f,
-                                                &bc,
-                                                tab,
-                                                &tab_names,
-                                                list_items,
-                                                content_title,
-                                                detail_text.as_deref(),
-                                                drill.as_ref(),
-                                                refresh_secs,
-                                                opts.use_utc,
-                                            );
-                                        })
-                                        .map_err(|e| e.to_string())?;
-                                    load_tab(&client, app_id, tab, &mut tab_data).await?;
-                                    loaded_tabs.insert((app_id, tab));
-                                    loading_msg = None;
+                                if !loaded_tabs.contains(&(app_id, tab))
+                                    && !pending_tab_loads.contains_key(&(app_id, tab))
+                                {
+                                    start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
                                 }
                             }
                             selected = 0;
@@ -743,41 +810,21 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                                 current_app = Some((app_id, name.clone()));
                                 breadcrumb = vec![name];
                                 tab = Tab::Endpoints;
+                                tab_data = TabData::default();
+                                loaded_tabs.clear();
+                                tab_errors.clear();
+                                if let Some((_, _, h)) = pending_metric_load.take() {
+                                    h.abort();
+                                }
+                                for (_, h) in pending_tab_loads.drain() {
+                                    h.abort();
+                                }
                                 if let Some((id, _)) = current_app {
-                                    loading_msg = Some("Loading endpoints…".to_string());
-                                    let (bc, tab_names, list_items, content_title, detail_text) =
-                                        build_ui_state(
-                                            current_app.as_ref(),
-                                            &breadcrumb,
-                                            tab,
-                                            &tab_data,
-                                            &app_list,
-                                            app_search_committed.as_str(),
-                                            app_selected,
-                                            selected,
-                                            drill_label.as_deref(),
-                                            loading_msg.as_deref(),
-                                            drill.is_some(),
-                                        );
-                                    terminal
-                                        .draw(|f| {
-                                            draw_ui(
-                                                f,
-                                                &bc,
-                                                tab,
-                                                &tab_names,
-                                                list_items,
-                                                content_title,
-                                                detail_text.as_deref(),
-                                                drill.as_ref(),
-                                                refresh_secs,
-                                                opts.use_utc,
-                                            );
-                                        })
-                                        .map_err(|e| e.to_string())?;
-                                    load_tab(&client, id, tab, &mut tab_data).await?;
-                                    loaded_tabs.insert((id, tab));
-                                    loading_msg = None;
+                                    if !loaded_tabs.contains(&(id, tab))
+                                        && !pending_tab_loads.contains_key(&(id, tab))
+                                    {
+                                        start_tab_load(&mut pending_tab_loads, &client, id, tab);
+                                    }
                                 }
                                 selected = 0;
                             }
@@ -787,48 +834,22 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                         } else if let Some((app_id, _)) = current_app {
                             if tab == Tab::Metrics {
                                 if let Some(mt) = tab_data.get_metric_type(selected) {
-                                    drill_label = Some(mt.to_string());
-                                    loading_msg = Some(format!("Loading metric {}…", mt));
-                                    let (bc, tab_names, list_items, content_title, detail_text) =
-                                        build_ui_state(
-                                            current_app.as_ref(),
-                                            &breadcrumb,
-                                            tab,
-                                            &tab_data,
-                                            &app_list,
-                                            app_search_committed.as_str(),
-                                            app_selected,
-                                            selected,
-                                            drill_label.as_deref(),
-                                            loading_msg.as_deref(),
-                                            drill.is_some(),
-                                        );
-                                    terminal
-                                        .draw(|f| {
-                                            draw_ui(
-                                                f,
-                                                &bc,
-                                                tab,
-                                                &tab_names,
-                                                list_items,
-                                                content_title,
-                                                detail_text.as_deref(),
-                                                drill.as_ref(),
-                                                refresh_secs,
-                                                opts.use_utc,
-                                            );
-                                        })
-                                        .map_err(|e| e.to_string())?;
-                                    match fetch_metric_series(&client, app_id, mt).await {
-                                        Ok(v) => drill = Some(DrillContent::MetricSeries(v)),
-                                        Err(e) => {
-                                            drill = Some(DrillContent::Preformatted(format!(
-                                                "Error: {}",
-                                                e
-                                            )))
-                                        }
+                                    if let Some((_, _, old_handle)) = pending_metric_load.take() {
+                                        old_handle.abort();
                                     }
-                                    loading_msg = None;
+                                    let metric_name = mt.to_string();
+                                    drill_label = Some(mt.to_string());
+                                    drill = Some(DrillContent::Preformatted(format!(
+                                        "Loading metric {}…",
+                                        metric_name
+                                    )));
+                                    let client_clone = client.clone();
+                                    let metric_clone = metric_name.clone();
+                                    let handle = tokio::spawn(async move {
+                                        fetch_metric_series(&client_clone, app_id, &metric_clone)
+                                            .await
+                                    });
+                                    pending_metric_load = Some((app_id, metric_name, handle));
                                 }
                             } else if let Some((label, detail_value)) =
                                 tab_data.get_item(tab, selected)
@@ -859,46 +880,15 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
         } else if should_refresh {
             last_refresh = Instant::now();
             if let Some((app_id, _)) = current_app {
-                loading_msg = Some(format!("Refreshing {}…", tab.as_str().to_lowercase()));
-                let (bc, tab_names, list_items, content_title, detail_text) = build_ui_state(
-                    current_app.as_ref(),
-                    &breadcrumb,
-                    tab,
-                    &tab_data,
-                    &app_list,
-                    app_search_committed.as_str(),
-                    app_selected,
-                    selected,
-                    drill_label.as_deref(),
-                    loading_msg.as_deref(),
-                    drill.is_some(),
-                );
-                terminal
-                    .draw(|f| {
-                        draw_ui(
-                            f,
-                            &bc,
-                            tab,
-                            &tab_names,
-                            list_items,
-                            content_title,
-                            detail_text.as_deref(),
-                            drill.as_ref(),
-                            refresh_secs,
-                            opts.use_utc,
-                        );
-                    })
-                    .map_err(|e| e.to_string())?;
-                load_tab(&client, app_id, tab, &mut tab_data).await?;
-                loading_msg = None;
-                selected = selected.min(tab_data.list_len(tab).saturating_sub(1));
+                if !pending_tab_loads.contains_key(&(app_id, tab)) {
+                    start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
+                }
             }
         }
     }
 
-    crossterm::execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen)
-        .map_err(|e| e.to_string())?;
-    crossterm::terminal::disable_raw_mode().map_err(|e| e.to_string())?;
+    execute!(io::stdout(), LeaveAlternateScreen, Show).map_err(|e| e.to_string())?;
+    disable_raw_mode().map_err(|e| e.to_string())?;
     terminal.show_cursor().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -938,31 +928,47 @@ impl TabData {
     }
 }
 
-async fn load_tab(
-    client: &Client,
-    app_id: u64,
-    tab: Tab,
-    data: &mut TabData,
-) -> Result<(), String> {
+async fn fetch_tab_payload(client: &Client, app_id: u64, tab: Tab) -> Result<TabPayload, String> {
     match tab {
         Tab::Endpoints => {
             let v = fetch_endpoints(client, app_id).await?;
-            data.endpoints = endpoints_as_list(&v);
+            Ok(TabPayload::Endpoints(endpoints_as_list(&v)))
         }
         Tab::Insights => {
             let v = fetch_insights(client, app_id).await?;
-            data.insights = insights_as_list(&v);
+            Ok(TabPayload::Insights(insights_as_list(&v)))
         }
-        Tab::Metrics => {
-            data.metrics = fetch_metrics_list(client, app_id).await?;
-        }
+        Tab::Metrics => Ok(TabPayload::Metrics(fetch_metrics_list(client, app_id).await?)),
         Tab::Errors => {
             let mut errs = fetch_errors(client, app_id).await?;
             errs.sort_by_key(|b| std::cmp::Reverse(time_sort_key(b))); // desc (latest first)
-            data.errors = errs;
+            Ok(TabPayload::Errors(errs))
         }
     }
-    Ok(())
+}
+
+fn apply_tab_payload(data: &mut TabData, tab: Tab, payload: TabPayload) {
+    match (tab, payload) {
+        (Tab::Endpoints, TabPayload::Endpoints(v)) => data.endpoints = v,
+        (Tab::Insights, TabPayload::Insights(v)) => data.insights = v,
+        (Tab::Metrics, TabPayload::Metrics(v)) => data.metrics = v,
+        (Tab::Errors, TabPayload::Errors(v)) => data.errors = v,
+        _ => {}
+    }
+}
+
+fn start_tab_load(
+    pending: &mut HashMap<(u64, Tab), JoinHandle<Result<TabPayload, String>>>,
+    client: &Client,
+    app_id: u64,
+    tab: Tab,
+) {
+    if pending.contains_key(&(app_id, tab)) {
+        return;
+    }
+    let client_clone = client.clone();
+    let handle = tokio::spawn(async move { fetch_tab_payload(&client_clone, app_id, tab).await });
+    pending.insert((app_id, tab), handle);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -973,8 +979,8 @@ fn build_ui_state<'a>(
     tab_data: &TabData,
     app_list: &[Value],
     app_search: &str,
-    app_selected: usize,
-    selected: usize,
+    _app_selected: usize,
+    _selected: usize,
     drill_label: Option<&str>,
     loading_msg: Option<&str>,
     is_drill_view: bool,
@@ -999,24 +1005,23 @@ fn build_ui_state<'a>(
     }
     let tab_names = Tab::all().iter().map(|t| t.as_str()).collect::<Vec<_>>();
     let (list_items, content_title, detail_text) = if let Some(msg) = loading_msg {
-        let estimate = "Usually 1–3 seconds depending on network.";
-        let text = format!("⟳  {}\n\n{}\n\nPlease wait…", msg, estimate);
-        (Vec::new(), " Loading ".to_string(), Some(text))
+        if msg.starts_with("Error:") {
+            (Vec::new(), " Error ".to_string(), Some(msg.to_string()))
+        } else {
+            let estimate = "Usually 1–3 seconds depending on network.";
+            let text = format!("⟳  {}\n\n{}\n\nPlease wait…", msg, estimate);
+            (Vec::new(), " Loading ".to_string(), Some(text))
+        }
     } else if current_app.is_none() {
         let indices = filtered_app_indices(app_list, app_search);
         let items: Vec<ListItem> = indices
             .iter()
             .enumerate()
-            .map(|(i, &idx)| {
+            .map(|(_, &idx)| {
                 let app = &app_list[idx];
                 let name = app.get("name").and_then(|v| v.as_str()).unwrap_or("?");
                 let id = app.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
-                let style = if i == app_selected {
-                    Style::default().add_modifier(Modifier::REVERSED)
-                } else {
-                    Style::default()
-                };
-                ListItem::new(Line::from(Span::styled(format!("{}  {}", id, name), style)))
+                ListItem::new(Line::from(format!("{}  {}", id, name)))
             })
             .collect();
         let title = if app_search.is_empty() {
@@ -1039,57 +1044,31 @@ fn build_ui_state<'a>(
                 .endpoints
                 .iter()
                 .enumerate()
-                .map(|(i, (name, _))| {
-                    let style = if i == selected {
-                        Style::default().add_modifier(Modifier::REVERSED)
-                    } else {
-                        Style::default()
-                    };
-                    ListItem::new(Line::from(Span::styled(name.clone(), style)))
-                })
+                .map(|(_, (name, _))| ListItem::new(Line::from(name.clone())))
                 .collect(),
             Tab::Insights => tab_data
                 .insights
                 .iter()
                 .enumerate()
-                .map(|(i, (name, _))| {
-                    let style = if i == selected {
-                        Style::default().add_modifier(Modifier::REVERSED)
-                    } else {
-                        Style::default()
-                    };
-                    ListItem::new(Line::from(Span::styled(name.clone(), style)))
-                })
+                .map(|(_, (name, _))| ListItem::new(Line::from(name.clone())))
                 .collect(),
             Tab::Metrics => tab_data
                 .metrics
                 .iter()
                 .enumerate()
-                .map(|(i, name)| {
-                    let style = if i == selected {
-                        Style::default().add_modifier(Modifier::REVERSED)
-                    } else {
-                        Style::default()
-                    };
-                    ListItem::new(Line::from(Span::styled(name.clone(), style)))
-                })
+                .map(|(_, name)| ListItem::new(Line::from(name.clone())))
                 .collect(),
             Tab::Errors => tab_data
                 .errors
                 .iter()
                 .enumerate()
-                .map(|(i, v)| {
+                .map(|(_, v)| {
                     let name = v
                         .get("message")
                         .or_else(|| v.get("name"))
                         .and_then(|n| n.as_str())
                         .unwrap_or("?");
-                    let style = if i == selected {
-                        Style::default().add_modifier(Modifier::REVERSED)
-                    } else {
-                        Style::default()
-                    };
-                    ListItem::new(Line::from(Span::styled(name.to_string(), style)))
+                    ListItem::new(Line::from(name.to_string()))
                 })
                 .collect(),
         };
@@ -1106,6 +1085,8 @@ fn draw_ui(
     current_tab: Tab,
     tab_names: &[&str],
     list_items: Vec<ListItem>,
+    list_selected: Option<usize>,
+    loading_indicator: Option<&str>,
     content_title: String,
     detail_text: Option<&str>,
     drill: Option<&DrillContent>,
@@ -1119,7 +1100,7 @@ fn draw_ui(
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(breadcrumb_height), Constraint::Min(1)])
-            .split(f.size())
+            .split(f.area())
     } else {
         Layout::default()
             .direction(Direction::Vertical)
@@ -1128,7 +1109,7 @@ fn draw_ui(
                 Constraint::Length(3),
                 Constraint::Min(1),
             ])
-            .split(f.size())
+            .split(f.area())
     };
     let breadcrumb_area = vertical[0];
     let content_area = vertical[vertical.len() - 1];
@@ -1149,43 +1130,39 @@ fn draw_ui(
             .block(Block::default().borders(Borders::BOTTOM))
     };
     f.render_widget(breadcrumb_block, breadcrumb_area);
+    if let Some(indicator) = loading_indicator {
+        let indicator_widget = Paragraph::new(indicator)
+            .alignment(Alignment::Right)
+            .style(Style::default().fg(Color::Yellow));
+        f.render_widget(indicator_widget, breadcrumb_area);
+    }
 
     if !is_app_select && vertical.len() > 2 {
-        let tab_line: Line = Line::from(
-            tab_names
-                .iter()
-                .map(|&name| {
-                    let active = name == current_tab.as_str();
-                    Span::styled(
-                        format!(" {} ", name),
-                        if active {
-                            Style::default()
-                                .fg(Color::Black)
-                                .bg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(Color::Cyan)
-                        },
-                    )
-                })
-                .collect::<Vec<_>>(),
-        );
-        let tab_block = Paragraph::new(tab_line).block(Block::default());
-        f.render_widget(tab_block, vertical[1]);
+        let tab_index = tab_names
+            .iter()
+            .position(|&name| name == current_tab.as_str())
+            .unwrap_or(0);
+        let tabs = Tabs::new(tab_names.iter().map(|name| Line::from(format!(" {} ", name))))
+            .select(tab_index)
+            .style(Style::default().fg(Color::Cyan))
+            .highlight_style(
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            );
+        f.render_widget(tabs, vertical[1]);
     }
     let is_loading = content_title.trim() == "Loading";
     let detail_str: Option<String> = match (detail_text, drill) {
         (Some(t), _) => Some(t.to_string()),
         (None, Some(DrillContent::Preformatted(s))) => Some(s.clone()),
-        (None, Some(DrillContent::MetricSeries(v))) => Some(format_metric_series(
-            v,
-            content_area.width as usize,
-            use_utc,
-            Some(content_title.trim()),
-        )),
+        (None, Some(DrillContent::MetricSeries(_))) => None,
         (None, None) => None,
     };
-    if list_items.is_empty() && detail_str.is_none() {
+    if let Some(DrillContent::MetricSeries(v)) = drill {
+        render_metric_chart(f, content_area, v, use_utc, Some(content_title.trim()));
+    } else if list_items.is_empty() && detail_str.is_none() {
         let empty = Paragraph::new("No data or select an item and press Enter.")
             .block(
                 Block::default()
@@ -1208,7 +1185,6 @@ fn draw_ui(
                     .borders(Borders::ALL)
                     .border_style(border_style),
             )
-            .wrap(Wrap { trim: true })
             .style(Style::default().fg(if is_loading {
                 Color::Yellow
             } else {
@@ -1216,12 +1192,16 @@ fn draw_ui(
             }));
         f.render_widget(para, content_area);
     } else {
-        let list = List::new(list_items).block(
-            Block::default()
-                .title(content_title)
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
-        );
-        f.render_widget(list, content_area);
+        let list = List::new(list_items)
+            .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+            .block(
+                Block::default()
+                    .title(content_title)
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan)),
+            );
+        let mut state = ListState::default();
+        state.select(list_selected);
+        f.render_stateful_widget(list, content_area, &mut state);
     }
 }
