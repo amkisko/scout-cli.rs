@@ -57,9 +57,7 @@ pub fn format_value(mode: OutputMode, value: &Value) -> Result<String, String> {
     match mode {
         OutputMode::HumanPlain => Ok(format_human_plain(value, terminal_columns())),
         OutputMode::ScriptPlain => Ok(format_script_plain(value)),
-        OutputMode::JsonCompact => {
-            serde_json::to_string(value).map_err(|error| error.to_string())
-        }
+        OutputMode::JsonCompact => serde_json::to_string(value).map_err(|error| error.to_string()),
         OutputMode::JsonPretty => {
             serde_json::to_string_pretty(value).map_err(|error| error.to_string())
         }
@@ -209,7 +207,11 @@ fn render_table(
                         .get(key)
                         .and_then(as_short_str)
                         .unwrap_or_else(|| "-".to_string());
-                    format!("{:>width$}", truncate(&cell, column_width), width = column_width)
+                    format!(
+                        "{:>width$}",
+                        truncate(&cell, column_width),
+                        width = column_width
+                    )
                 })
                 .collect::<Vec<_>>()
                 .join(" ");

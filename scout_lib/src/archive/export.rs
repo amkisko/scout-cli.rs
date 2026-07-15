@@ -86,7 +86,10 @@ pub struct ExportReport {
     pub output: String,
 }
 
-pub fn export_archive(store: &ArchiveStore, request: &ExportRequest) -> Result<ExportReport, String> {
+pub fn export_archive(
+    store: &ArchiveStore,
+    request: &ExportRequest,
+) -> Result<ExportReport, String> {
     validate_export_request(request)?;
     let payload = load_export_payload(store, request)?;
     let rendered = render_export(request, &payload)?;
@@ -115,7 +118,10 @@ fn validate_export_request(request: &ExportRequest) -> Result<(), String> {
     Ok(())
 }
 
-fn load_export_payload(store: &ArchiveStore, request: &ExportRequest) -> Result<ExportPayload, String> {
+fn load_export_payload(
+    store: &ArchiveStore,
+    request: &ExportRequest,
+) -> Result<ExportPayload, String> {
     match request.resource {
         ExportResource::Metrics => {
             let metric_type = request
@@ -127,7 +133,10 @@ fn load_export_payload(store: &ArchiveStore, request: &ExportRequest) -> Result<
                 .clone()
                 .ok_or_else(|| "date is required for metrics export (YYYY-MM-DD)".to_string())?;
             let bucket = store.load_metric_bucket(request.app_id, &metric_type, &date)?;
-            Ok(ExportPayload::MetricBucket { metric_type, bucket })
+            Ok(ExportPayload::MetricBucket {
+                metric_type,
+                bucket,
+            })
         }
         ExportResource::Endpoints | ExportResource::Jobs | ExportResource::Errors => {
             let from = request
@@ -138,12 +147,8 @@ fn load_export_payload(store: &ArchiveStore, request: &ExportRequest) -> Result<
                 .to
                 .clone()
                 .ok_or_else(|| "to is required for range export".to_string())?;
-            let snapshot = store.load_range_snapshot(
-                request.app_id,
-                request.resource.as_str(),
-                &from,
-                &to,
-            )?;
+            let snapshot =
+                store.load_range_snapshot(request.app_id, request.resource.as_str(), &from, &to)?;
             Ok(ExportPayload::RangeSnapshot(snapshot))
         }
     }
@@ -152,7 +157,9 @@ fn load_export_payload(store: &ArchiveStore, request: &ExportRequest) -> Result<
 fn count_records(payload: &ExportPayload) -> u64 {
     match payload {
         ExportPayload::MetricBucket { bucket, .. } => metric_points(&bucket.series).len() as u64,
-        ExportPayload::RangeSnapshot(snapshot) => extract_records_for_resource(snapshot).len() as u64,
+        ExportPayload::RangeSnapshot(snapshot) => {
+            extract_records_for_resource(snapshot).len() as u64
+        }
     }
 }
 
@@ -196,7 +203,11 @@ fn render_csv(resource: ExportResource, payload: &ExportPayload) -> Result<Vec<u
 }
 
 fn render_prometheus(request: &ExportRequest, payload: &ExportPayload) -> Result<Vec<u8>, String> {
-    let ExportPayload::MetricBucket { metric_type, bucket } = payload else {
+    let ExportPayload::MetricBucket {
+        metric_type,
+        bucket,
+    } = payload
+    else {
         return Err("prometheus export supports metrics only".to_string());
     };
     let mut output = String::new();
@@ -239,7 +250,10 @@ fn render_parquet(request: &ExportRequest, payload: &ExportPayload) -> Result<Ve
 
 fn payload_to_json(payload: &ExportPayload) -> Result<Value, String> {
     match payload {
-        ExportPayload::MetricBucket { metric_type, bucket } => Ok(serde_json::json!({
+        ExportPayload::MetricBucket {
+            metric_type,
+            bucket,
+        } => Ok(serde_json::json!({
             "metric_type": metric_type,
             "date": bucket.date,
             "series": bucket.series,
@@ -255,7 +269,10 @@ fn payload_to_json(payload: &ExportPayload) -> Result<Value, String> {
 
 fn payload_records(payload: &ExportPayload) -> Result<Vec<Value>, String> {
     match payload {
-        ExportPayload::MetricBucket { metric_type, bucket } => Ok(metric_points(&bucket.series)
+        ExportPayload::MetricBucket {
+            metric_type,
+            bucket,
+        } => Ok(metric_points(&bucket.series)
             .into_iter()
             .map(|(series_name, timestamp, value)| {
                 serde_json::json!({
@@ -412,9 +429,7 @@ fn write_export_output(request: &ExportRequest, bytes: &[u8]) -> Result<String, 
     } else {
         let stdout = std::io::stdout();
         let mut handle = stdout.lock();
-        handle
-            .write_all(bytes)
-            .map_err(|error| error.to_string())?;
+        handle.write_all(bytes).map_err(|error| error.to_string())?;
         if !bytes.ends_with(b"\n") && request.format != ExportFormat::Parquet {
             handle.write_all(b"\n").map_err(|error| error.to_string())?;
         }
@@ -546,7 +561,8 @@ mod parquet_export {
             ("latency", record.get("latency")),
             ("errors_count", record.get("errors_count")),
         ] {
-            let Some(number) = value.and_then(|entry| entry.as_f64().or_else(|| entry.as_i64().map(|v| v as f64)))
+            let Some(number) =
+                value.and_then(|entry| entry.as_f64().or_else(|| entry.as_i64().map(|v| v as f64)))
             else {
                 continue;
             };

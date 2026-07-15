@@ -14,7 +14,10 @@ pub struct RunContext {
     pub error_context: ErrorContext,
 }
 
-fn resolve_command_app_id(app: &crate::cli::AppIdArgs, override_id: Option<u64>) -> Result<u64, String> {
+fn resolve_command_app_id(
+    app: &crate::cli::AppIdArgs,
+    override_id: Option<u64>,
+) -> Result<u64, String> {
     crate::cli::resolve_app_id(app.app_id, override_id)
 }
 
@@ -37,7 +40,9 @@ pub async fn api_command_value(
         Commands::Apps { active_since } => {
             status_message(context.quiet, "Fetching applications…");
             let apps = client.list_apps(active_since.as_deref()).await?;
-            if let Some(first) = apps.first().and_then(|app| app.get("id").and_then(|v| v.as_u64()))
+            if let Some(first) = apps
+                .first()
+                .and_then(|app| app.get("id").and_then(|v| v.as_u64()))
             {
                 suggest_next_command(
                     context.quiet,
@@ -47,13 +52,15 @@ pub async fn api_command_value(
             Ok(serde_json::to_value(&apps).map_err(|e| Error::Other(e.to_string()))?)
         }
         Commands::App { app } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching application…");
             let app_value = client.get_app(app_id).await?;
             Ok(app_value)
         }
         Commands::Metrics { app } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching metric types…");
             let list = client.list_metrics(app_id).await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
@@ -65,7 +72,8 @@ pub async fn api_command_value(
             to,
             range,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching metric data…");
             let data = client
                 .get_metric(
@@ -87,7 +95,8 @@ pub async fn api_command_value(
             limit,
             offset,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching endpoints…");
             let data = client
                 .list_endpoints(
@@ -116,7 +125,8 @@ pub async fn api_command_value(
             to,
             range,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching endpoint metric…");
             let data = client
                 .get_endpoint_metrics(
@@ -137,7 +147,8 @@ pub async fn api_command_value(
             to,
             range,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             validate_trace_window(from.as_deref(), to.as_deref(), range.as_deref())?;
             status_message(context.quiet, "Fetching endpoint traces…");
             let data = client
@@ -157,7 +168,8 @@ pub async fn api_command_value(
             to,
             range,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching jobs…");
             let data = client
                 .list_jobs(app_id, from.as_deref(), to.as_deref(), range.as_deref())
@@ -165,7 +177,8 @@ pub async fn api_command_value(
             Ok(data)
         }
         Commands::JobMetrics { app, job_id } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching job metrics…");
             let list = client.list_job_metrics(app_id, &job_id).await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
@@ -178,7 +191,8 @@ pub async fn api_command_value(
             to,
             range,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching job metric…");
             let data = client
                 .get_job_metrics(
@@ -199,7 +213,8 @@ pub async fn api_command_value(
             to,
             range,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             validate_trace_window(from.as_deref(), to.as_deref(), range.as_deref())?;
             status_message(context.quiet, "Fetching job traces…");
             let data = client
@@ -214,7 +229,8 @@ pub async fn api_command_value(
             Ok(data)
         }
         Commands::Trace { app, trace_id } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching trace…");
             let trace = client.fetch_trace(app_id, trace_id).await?;
             Ok(trace)
@@ -228,7 +244,8 @@ pub async fn api_command_value(
             metric,
             endpoint,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching anomaly events…");
             let list = client
                 .list_anomaly_events(
@@ -243,8 +260,12 @@ pub async fn api_command_value(
                 .await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
         }
-        Commands::AnomalyEvent { app, anomaly_event_id } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+        Commands::AnomalyEvent {
+            app,
+            anomaly_event_id,
+        } => {
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching anomaly event…");
             let event = client.get_anomaly_event(app_id, anomaly_event_id).await?;
             Ok(event)
@@ -255,7 +276,8 @@ pub async fn api_command_value(
             to,
             endpoint,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching error groups…");
             let list = client
                 .list_error_groups(app_id, from.as_deref(), to.as_deref(), endpoint.as_deref())
@@ -263,19 +285,22 @@ pub async fn api_command_value(
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
         }
         Commands::Error { app, error_id } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching error group…");
             let err = client.get_error_group(app_id, error_id).await?;
             Ok(err)
         }
         Commands::ErrorGroupErrors { app, error_id } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching errors in group…");
             let list = client.get_error_group_errors(app_id, error_id).await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
         }
         Commands::Insights { app, limit } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching insights…");
             let data = client.get_all_insights(app_id, limit).await?;
             Ok(data)
@@ -285,7 +310,8 @@ pub async fn api_command_value(
             insight_type,
             limit,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching insight…");
             let data = client
                 .get_insight_by_type(app_id, &insight_type, limit)
@@ -301,7 +327,8 @@ pub async fn api_command_value(
             pagination_direction,
             pagination_page,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching insights history…");
             let data = client
                 .get_insights_history(
@@ -326,7 +353,8 @@ pub async fn api_command_value(
             pagination_direction,
             pagination_page,
         } => {
-            let app_id = resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+            let app_id =
+                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
             status_message(context.quiet, "Fetching insights history…");
             let data = client
                 .get_insights_history_by_type(

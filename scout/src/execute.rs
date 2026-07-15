@@ -36,9 +36,7 @@ pub fn command_allowed_in_batch(command: &Commands) -> Result<(), String> {
         Commands::Config {
             command: ConfigCommands::Set { .. } | ConfigCommands::Unset { .. },
             ..
-        } => {
-            Err("config set/unset are disabled in batch (state-changing)".to_string())
-        }
+        } => Err("config set/unset are disabled in batch (state-changing)".to_string()),
         _ => Ok(()),
     }
 }

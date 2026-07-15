@@ -97,7 +97,9 @@ struct BatchFile {
     operations: Vec<BatchOperation>,
 }
 
-fn validate_operations(operations: Vec<BatchOperation>) -> Result<Vec<BatchOperation>, BatchLoadError> {
+fn validate_operations(
+    operations: Vec<BatchOperation>,
+) -> Result<Vec<BatchOperation>, BatchLoadError> {
     if operations.is_empty() {
         return Err(BatchLoadError::Invalid(
             "batch must include at least one operation".to_string(),
@@ -142,9 +144,8 @@ pub async fn run_batch(
     let mut client: Option<Client> = None;
     if needs_api {
         util::progress_message(parent.quiet, "Resolving API key…");
-        let (api_key, _) = get_api_key().map_err(|error| {
-            crate::cli_error::print_error(&error, &error_context(&parent))
-        })?;
+        let (api_key, _) = get_api_key()
+            .map_err(|error| crate::cli_error::print_error(&error, &error_context(&parent)))?;
         client = Some(Client::with_options(
             api_key,
             parent.timeout.unwrap_or(15),
@@ -179,18 +180,19 @@ pub async fn run_batch(
                     operation,
                     "operation args must include a subcommand".to_string(),
                 ),
-                Some(command) => match execute_command_value(client.as_ref(), command, &run_context).await
-                {
-                    Ok(data) => BatchItemResult {
-                        index,
-                        id: operation.id,
-                        args: operation.args,
-                        ok: true,
-                        data: Some(data),
-                        error: None,
-                    },
-                    Err(error) => failed_item(index, operation, error),
-                },
+                Some(command) => {
+                    match execute_command_value(client.as_ref(), command, &run_context).await {
+                        Ok(data) => BatchItemResult {
+                            index,
+                            id: operation.id,
+                            args: operation.args,
+                            ok: true,
+                            data: Some(data),
+                            error: None,
+                        },
+                        Err(error) => failed_item(index, operation, error),
+                    }
+                }
             },
             Err(error) => failed_item(index, operation, error),
         };

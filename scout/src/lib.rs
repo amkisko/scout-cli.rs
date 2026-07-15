@@ -45,8 +45,7 @@ fn try_run() -> Result<(), AppExit> {
     }
 
     if let Some(Commands::Completions { shell }) = cli.command {
-        return completions::run(shell)
-            .map_err(|error| print_error(&error, &error_context));
+        return completions::run(shell).map_err(|error| print_error(&error, &error_context));
     }
 
     if matches!(cli.command, Some(Commands::Man)) {
@@ -59,7 +58,11 @@ fn try_run() -> Result<(), AppExit> {
             .map_err(|error| print_scout_error(&error, &error_context));
     }
 
-    if let Some(Commands::Config { ref command, ref options }) = cli.command {
+    if let Some(Commands::Config {
+        ref command,
+        ref options,
+    }) = cli.command
+    {
         let config_context = config_cmd::ConfigContext {
             json: matches!(cli.output, OutputFormatArg::Json) || cli.json || cli.json_pretty,
             quiet: cli.quiet,
@@ -74,7 +77,11 @@ fn try_run() -> Result<(), AppExit> {
             .map_err(|error| print_error(&error, &error_context));
     }
 
-    if let Some(Commands::Batch { ref file, fail_fast }) = cli.command {
+    if let Some(Commands::Batch {
+        ref file,
+        fail_fast,
+    }) = cli.command
+    {
         let operations = match batch_cmd::load_operations(file.as_deref()) {
             Err(batch_cmd::BatchLoadError::MissingInteractiveInput) => {
                 batch_cmd::print_concise_usage();
@@ -85,9 +92,8 @@ fn try_run() -> Result<(), AppExit> {
             }
             Ok(operations) => operations,
         };
-        let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-            print_error(&error.to_string(), &error_context)
-        })?;
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|error| print_error(&error.to_string(), &error_context))?;
         return runtime.block_on(batch_cmd::run_batch(cli, operations, fail_fast));
     }
 
@@ -133,9 +139,8 @@ fn try_run() -> Result<(), AppExit> {
         }
     }
 
-    let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-        print_error(&error.to_string(), &error_context)
-    })?;
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| print_error(&error.to_string(), &error_context))?;
 
     runtime.block_on(async { run_async(cli, error_context).await })
 }
@@ -146,11 +151,7 @@ async fn run_async(cli: Cli, error_context: ErrorContext) -> Result<(), AppExit>
     }
     util::progress_message(cli.quiet, "Resolving API key…");
     let (api_key, _source) = get_api_key().map_err(|error| print_error(&error, &error_context))?;
-    let client = Client::with_options(
-        api_key,
-        cli.timeout.unwrap_or(15),
-        cli.api_base.clone(),
-    );
+    let client = Client::with_options(api_key, cli.timeout.unwrap_or(15), cli.api_base.clone());
     let mode = resolve_output_mode(&cli);
     let run_context = RunContext {
         mode,
@@ -180,63 +181,61 @@ async fn run_async(cli: Cli, error_context: ErrorContext) -> Result<(), AppExit>
     let command = cli.command.unwrap();
     match command {
         Commands::Archive {
-            command: cli::ArchiveCommands::Pull {
-                app,
-                from,
-                to,
-                range,
-                resource,
-                metric,
-                force,
-                incremental,
-                trace_id,
-                trace_endpoint_limit,
-                dry_run,
-            },
-        } => {
-            archive_cmd::run_archive_pull(
-                &client,
-                archive_cmd::ArchivePullRequest {
+            command:
+                cli::ArchiveCommands::Pull {
                     app,
                     from,
                     to,
                     range,
                     resource,
                     metric,
-                    trace_id,
-                    trace_endpoint_limit,
                     force,
                     incremental,
+                    trace_id,
+                    trace_endpoint_limit,
                     dry_run,
                 },
-                &archive_cmd::ArchiveContext {
-                    mode: run_context.mode,
-                    quiet: run_context.quiet,
-                },
-            )
-            .await
-            .map_err(|error| print_error(&error, &error_context))
-        }
-        Commands::Archive {
-            command: cli::ArchiveCommands::Trace {
+        } => archive_cmd::run_archive_pull(
+            &client,
+            archive_cmd::ArchivePullRequest {
                 app,
+                from,
+                to,
+                range,
+                resource,
+                metric,
                 trace_id,
+                trace_endpoint_limit,
                 force,
+                incremental,
+                dry_run,
             },
-        } => {
-            archive_cmd::run_archive_trace(
-                &client,
-                app,
-                trace_id,
-                force,
-                &archive_cmd::ArchiveContext {
-                    mode: run_context.mode,
-                    quiet: run_context.quiet,
+            &archive_cmd::ArchiveContext {
+                mode: run_context.mode,
+                quiet: run_context.quiet,
+            },
+        )
+        .await
+        .map_err(|error| print_error(&error, &error_context)),
+        Commands::Archive {
+            command:
+                cli::ArchiveCommands::Trace {
+                    app,
+                    trace_id,
+                    force,
                 },
-            )
-            .await
-            .map_err(|error| print_error(&error, &error_context))
-        }
+        } => archive_cmd::run_archive_trace(
+            &client,
+            app,
+            trace_id,
+            force,
+            &archive_cmd::ArchiveContext {
+                mode: run_context.mode,
+                quiet: run_context.quiet,
+            },
+        )
+        .await
+        .map_err(|error| print_error(&error, &error_context)),
         other => commands::run_api_command(&client, other, &run_context)
             .await
             .map_err(|error| print_scout_error(&error, &error_context)),

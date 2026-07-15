@@ -1,6 +1,8 @@
 //! Read and write archive files with idempotent semantics.
 
-use crate::archive::layout::{AppManifest, ArchiveLayout, Manifest, RangeSnapshotMeta, MANIFEST_VERSION};
+use crate::archive::layout::{
+    AppManifest, ArchiveLayout, Manifest, RangeSnapshotMeta, MANIFEST_VERSION,
+};
 use crate::archive::metrics::MetricBucket;
 use crate::helpers::format_time;
 use chrono::Utc;
@@ -147,8 +149,11 @@ impl ArchiveStore {
         force: bool,
     ) -> Result<MetricMergeReport, String> {
         let existing_buckets = self.load_metric_buckets(app_id, metric_type)?;
-        let (merged_buckets, merge_stats) =
-            crate::archive::metrics::merge_series_into_buckets(metric_type, series, &existing_buckets);
+        let (merged_buckets, merge_stats) = crate::archive::metrics::merge_series_into_buckets(
+            metric_type,
+            series,
+            &existing_buckets,
+        );
 
         let mut report = MetricMergeReport {
             added_points: merge_stats.added_points,
@@ -193,7 +198,12 @@ impl ArchiveStore {
             .unwrap_or_default()
     }
 
-    pub fn store_app_metadata(&mut self, app_id: u64, data: Value, force: bool) -> Result<StoreAction, String> {
+    pub fn store_app_metadata(
+        &mut self,
+        app_id: u64,
+        data: Value,
+        force: bool,
+    ) -> Result<StoreAction, String> {
         let path = self.layout.app_metadata_path(app_id);
         if path.is_file() && !force {
             return Ok(StoreAction::Skipped);
@@ -207,7 +217,9 @@ impl ArchiveStore {
     }
 
     pub fn entity_exists(&self, app_id: u64, resource: &str, entity_id: &str) -> bool {
-        self.layout.entity_path(app_id, resource, entity_id).is_file()
+        self.layout
+            .entity_path(app_id, resource, entity_id)
+            .is_file()
     }
 
     pub fn store_entity(
@@ -266,9 +278,11 @@ impl ArchiveStore {
             .strip_prefix(self.layout.root())
             .map(|value| value.to_string_lossy().to_string())
             .unwrap_or_else(|_| path.display().to_string());
-        if let Some(existing) = entry.range_snapshots.iter_mut().find(|record| {
-            record.resource == resource && record.from == from && record.to == to
-        }) {
+        if let Some(existing) = entry
+            .range_snapshots
+            .iter_mut()
+            .find(|record| record.resource == resource && record.from == from && record.to == to)
+        {
             existing.stored_at = format_time(Utc::now());
             existing.path = relative_path;
             return;
@@ -362,13 +376,27 @@ mod tests {
         let mut store = ArchiveStore::open(layout).unwrap();
         let data = json!([{"name": "HomeController#index"}]);
         let action = store
-            .store_range_snapshot(1, "endpoints", "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z", data.clone(), false)
+            .store_range_snapshot(
+                1,
+                "endpoints",
+                "2025-01-01T00:00:00Z",
+                "2025-01-02T00:00:00Z",
+                data.clone(),
+                false,
+            )
             .unwrap();
         assert_eq!(action, StoreAction::Created);
         store.save_manifest().unwrap();
 
         let skipped = store
-            .store_range_snapshot(1, "endpoints", "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z", data, false)
+            .store_range_snapshot(
+                1,
+                "endpoints",
+                "2025-01-01T00:00:00Z",
+                "2025-01-02T00:00:00Z",
+                data,
+                false,
+            )
             .unwrap();
         assert_eq!(skipped, StoreAction::Skipped);
         let _ = fs::remove_dir_all(root);

@@ -105,7 +105,13 @@ impl ArchiveLayout {
         self.app_dir(app_id).join("app.json")
     }
 
-    pub fn range_snapshot_path(&self, app_id: u64, resource: &str, from: &str, to: &str) -> PathBuf {
+    pub fn range_snapshot_path(
+        &self,
+        app_id: u64,
+        resource: &str,
+        from: &str,
+        to: &str,
+    ) -> PathBuf {
         self.app_dir(app_id)
             .join(resource)
             .join("ranges")

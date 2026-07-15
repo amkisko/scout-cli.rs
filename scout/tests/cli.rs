@@ -108,7 +108,10 @@ fn archive_path_works_without_api_key() {
     std::fs::create_dir_all(&temp_home).unwrap();
 
     scout()
-        .env("SCOUT_ARCHIVE_HOME", temp_home.to_string_lossy().to_string())
+        .env(
+            "SCOUT_ARCHIVE_HOME",
+            temp_home.to_string_lossy().to_string(),
+        )
         .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
         .arg("archive")
         .arg("path")
@@ -230,7 +233,10 @@ fn archive_pull_dry_run_works_without_api_key() {
     std::fs::create_dir_all(&temp_home).unwrap();
 
     scout()
-        .env("SCOUT_ARCHIVE_HOME", temp_home.to_string_lossy().to_string())
+        .env(
+            "SCOUT_ARCHIVE_HOME",
+            temp_home.to_string_lossy().to_string(),
+        )
         .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
         .env_remove("SCOUT_OP_ENTRY_PATH")
         .env_remove("SCOUT_BW_ITEM_ID")
@@ -257,7 +263,10 @@ fn diff_missing_snapshot_suggests_archive_pull() {
     std::fs::create_dir_all(&temp_home).unwrap();
 
     scout()
-        .env("SCOUT_ARCHIVE_HOME", temp_home.to_string_lossy().to_string())
+        .env(
+            "SCOUT_ARCHIVE_HOME",
+            temp_home.to_string_lossy().to_string(),
+        )
         .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
         .arg("diff")
         .arg("endpoints")
@@ -280,7 +289,8 @@ fn diff_missing_snapshot_suggests_archive_pull() {
 
 #[test]
 fn config_dry_run_notice_goes_to_stderr() {
-    let temp_home = std::env::temp_dir().join(format!("scout-config-stderr-{}", std::process::id()));
+    let temp_home =
+        std::env::temp_dir().join(format!("scout-config-stderr-{}", std::process::id()));
     std::fs::create_dir_all(&temp_home).unwrap();
 
     scout()
@@ -343,7 +353,9 @@ fn batch_rejects_config_set() {
         .write_stdin(r#"[{"args":["config","set","op.entry_path","op://Vault/Item"]}]"#)
         .assert()
         .failure()
-        .stdout(predicate::str::contains("config set/unset are disabled in batch"));
+        .stdout(predicate::str::contains(
+            "config set/unset are disabled in batch",
+        ));
 
     let _ = std::fs::remove_dir_all(temp_home);
 }
@@ -383,15 +395,14 @@ fn batch_invalid_json_returns_usage_exit() {
 
 #[test]
 fn batch_partial_failure_prints_stderr_summary() {
-    let temp_home = std::env::temp_dir().join(format!("scout-batch-partial-{}", std::process::id()));
+    let temp_home =
+        std::env::temp_dir().join(format!("scout-batch-partial-{}", std::process::id()));
     std::fs::create_dir_all(&temp_home).unwrap();
 
     scout()
         .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
         .arg("batch")
-        .write_stdin(
-            r#"[{"args":["archive","path"]},{"args":["batch"]}]"#,
-        )
+        .write_stdin(r#"[{"args":["archive","path"]},{"args":["batch"]}]"#)
         .assert()
         .failure()
         .stderr(predicate::str::contains("1 of 2 operations failed"));
@@ -418,7 +429,8 @@ fn batch_json_pretty_formats_report() {
 
 #[test]
 fn batch_fail_fast_stops_after_first_failure() {
-    let temp_home = std::env::temp_dir().join(format!("scout-batch-failfast-{}", std::process::id()));
+    let temp_home =
+        std::env::temp_dir().join(format!("scout-batch-failfast-{}", std::process::id()));
     std::fs::create_dir_all(&temp_home).unwrap();
 
     scout()
@@ -446,9 +458,7 @@ fn batch_without_fail_fast_runs_remaining_operations() {
     scout()
         .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
         .arg("batch")
-        .write_stdin(
-            r#"[{"args":["batch"]},{"args":["archive","path"]}]"#,
-        )
+        .write_stdin(r#"[{"args":["batch"]},{"args":["archive","path"]}]"#)
         .assert()
         .failure()
         .stdout(predicate::str::contains("\"operations\":2"))
