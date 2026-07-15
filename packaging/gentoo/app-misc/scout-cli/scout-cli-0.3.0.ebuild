@@ -26,4 +26,5 @@ src_install() {
 	cargo_src_install
 	einstalldocs
 	dodoc LICENSE.md
+	# Completions and man page: scout completions bash|zsh|fish; scout man
 }

@@ -15,7 +15,17 @@ ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors from the ter
 
 ### Home config (`SCOUT_HOME`)
 
-By default the CLI reads backend settings from `~/.scout/config.env` and optional `~/.scout/config.local.env`. Set `SCOUT_HOME` to use another directory. Copy [config.env.example](config.env.example) as a starting point:
+By default the CLI reads backend settings from `~/.config/scout/config.env` (XDG) or legacy `~/.scout/config.env`, plus optional `config.local.env`. Set `SCOUT_HOME` to use another directory. Project-level `.scout.env` or `.env` in the current working directory can also supply `SCOUT_*` keys.
+
+Configuration precedence (highest first):
+
+1. Command-line flags
+2. Process environment variables
+3. `config.local.env` in the scout config directory
+4. `config.env` in the scout config directory
+5. `.scout.env` or `.env` in the current working directory
+
+Copy [config.env.example](config.env.example) as a starting point:
 
 ```bash
 mkdir -p ~/.scout
@@ -57,7 +67,7 @@ Resolution order: **1Password** → **Bitwarden** → **KeePassXC**. Each backen
 
 | Backend     | Env vars | Notes |
 |------------|----------|--------|
-| **1Password** | `SCOUT_OP_ENTRY_PATH=op://Vault/Item` or `SCOUT_OP_VAULT` + `SCOUT_OP_ITEM` | Optional `SCOUT_OP_FIELD` (default `API_KEY`). Uses `op read`. |
+| **1Password** | `SCOUT_OP_ENTRY_PATH=op://Vault/Item` or `op://Vault/Item/Field`, or `SCOUT_OP_VAULT` + `SCOUT_OP_ITEM` | When the path has no field segment, `SCOUT_OP_FIELD` is appended (default `API_KEY`). Uses `op read`. |
 | **Bitwarden** | `SCOUT_BW_ITEM_ID` (login item UUID) | Optional `SCOUT_BW_SESSION` (from `bw unlock --raw`). Uses `bw get password`. |
 | **KeePassXC** | `SCOUT_KPXC_DB` (path to .kdbx), `SCOUT_KPXC_ENTRY` (entry title/path) | Optional `SCOUT_KPXC_ATTRIBUTE` (default `Password`). Uses `keepassxc-cli show`. |
 
@@ -115,12 +125,20 @@ See [packaging/flatpak/](packaging/flatpak/). Build may require a Rust-enabled S
 
 All [OpenAPI v0.1](doc/openapi.yaml) endpoints are supported. For ScoutAPM API questions or additional endpoints, see [ScoutAPM documentation](https://scoutapm.com/docs).
 
-**Output format:** use `-o` / `--output` to choose how results are printed:
+**Output format:** use `-o` / `--output`, `--json`, or `--plain`:
 
 - **plain** (default) — human-readable tables and key-value text
-- **json** — JSON (pretty-printed) for scripting or piping
+- **--plain** — script-stable tab-separated records (one per line)
+- **-o json** — pretty JSON (backward compatible)
+- **--json** — compact JSON for scripts
 
-**Interactive TUI:** run `scout` with no arguments to start the interactive TUI and browse apps and endpoints (↑/↓ to select, Enter to load endpoints for the selected app, q or Esc to quit). Timestamps are shown in your local timezone by default; use `--utc` to show UTC only.
+**Global flags:** `--quiet`, `--verbose`, `--debug`, `--no-color`, `--no-input`, `--timeout`, `--api-base`. Use `scout config --dry-run` to preview config writes. Most flags work before or after the subcommand.
+
+**Shell completions:** `scout completions bash|zsh|fish` (also installed by Homebrew and AUR packages).
+
+**Uninstall:** remove the binary (`brew uninstall scout-cli`, `cargo uninstall scout`, or your package manager). Config in `SCOUT_HOME` / `~/.config/scout` is left in place unless you delete it manually.
+
+**Interactive TUI:** run `scout` with no arguments to start the interactive TUI and browse apps and endpoints (↑/↓ to select, Enter to load endpoints for the selected app, `?` for shortcuts, q or Esc to quit). Timestamps are shown in your local timezone by default; use `--utc` to show UTC only. Use `--no-input` or run in a non-terminal environment to disable the TUI.
 
 ```bash
 # Plain text (default)
@@ -171,7 +189,64 @@ scout insights-history-by-type 123 n_plus_one [same options]
 
 # Utilities
 scout parse-url "https://scoutapm.com/apps/123/endpoints/.../trace/456"
+scout parse-url -   # read URL from stdin
+scout completions bash > ~/.local/share/bash-completion/completions/scout
+scout man > /tmp/scout.1
 scout version
+scout --version
+
+# Local archive (extends ScoutAPM retention on your machine)
+scout archive path
+scout archive status
+scout archive status 123
+scout archive pull 123 --range 1day
+scout archive pull 123 --dry-run --range 1day
+scout archive pull 123 --incremental
+scout archive pull 123 --from 2025-01-01T00:00:00Z --to 2025-01-02T00:00:00Z --resource metrics --resource endpoints
+
+# Diff archived snapshots (local only, no API calls)
+scout diff endpoints 123 \
+  --left-from 2025-01-01T00:00:00Z --left-to 2025-01-02T00:00:00Z \
+  --right-from 2025-01-08T00:00:00Z --right-to 2025-01-09T00:00:00Z
+scout diff errors 123 --left-from ... --left-to ... --right-from ... --right-to ...
+scout diff jobs 123 --left-from ... --left-to ... --right-from ... --right-to ...
+scout diff metrics 123 response_time --left-date 2025-01-01 --right-date 2025-01-08
+
+# Archive one trace or pull traces from endpoint listings
+scout archive trace 123 456
+scout archive pull 123 --resource traces --range 1day
+scout archive pull 123 --trace-id 456 --trace-id 789
+
+# Export archived data for other systems
+scout archive export 123 --resource metrics --metric response_time --date 2025-01-01 --format prometheus
+scout archive export 123 --resource endpoints --from 2025-01-01T00:00:00Z --to 2025-01-02T00:00:00Z --format csv --output endpoints.csv
+scout archive export 123 --resource metrics --metric response_time --date 2025-01-01 --format parquet --output metrics.parquet
+scout archive export 123 --resource errors --from ... --to ... --format ndjson --output errors.ndjson
+
+# Batch multiple scout operations (stdout is always a JSON report)
+echo '[{"args":["archive","path"]},{"args":["config","path"]}]' | scout batch
+scout batch --file plan.json
+```
+
+Archive data is stored under `$SCOUT_ARCHIVE_HOME` (default: `{SCOUT_HOME}/archive`). Pulls are idempotent: existing range snapshots are skipped, and metric points are merged into daily buckets without overwriting known timestamps.
+
+`scout batch` runs several operations in one invocation. Each item is a normal scout subcommand (`args` array). Scout resolves API access only when an operation needs it; local commands such as `archive status` or `diff` use on-disk data. Output is always a JSON report on stdout with per-operation `ok`, `data`, and `error` fields; use `--json-pretty` for indented output. Pass `--fail-fast` to stop after the first failed operation. Nested batch and `config set`/`unset` are rejected. Run `scout batch` in a terminal without `--file` or piped input for concise usage help.
+
+Example batch plan (`plan.json`):
+
+```json
+{
+  "operations": [
+    { "id": "archive", "args": ["archive", "status", "123"] },
+    { "id": "apps", "args": ["apps"] }
+  ]
+}
+```
+
+Example cron for daily incremental pull:
+
+```bash
+0 6 * * * scout archive pull 123 --incremental --json >> ~/scout-pull.log 2>&1
 ```
 
 API key: configure one secret backend in `~/.scout/config.env` or via env vars (see above). Plain-text keys are not supported.
