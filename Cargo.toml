@@ -3,7 +3,7 @@ resolver = "2"
 members = ["scout_lib", "scout", "usr/bin/release"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["amkisko"]
 license = "MIT"

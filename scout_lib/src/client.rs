@@ -42,14 +42,20 @@ pub struct Client {
 impl Client {
     /// Create a new client with the given API key.
     pub fn new(api_key: String) -> Self {
+        Self::with_options(api_key, 15, None)
+    }
+
+    /// Create a client with custom timeout and optional API base URL.
+    pub fn with_options(api_key: String, timeout_secs: u64, api_base: Option<String>) -> Self {
         let user_agent = format!("scout-cli/{}", crate::VERSION);
+        let timeout_secs = timeout_secs.max(1);
         let http = HttpClient::builder()
-            .timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(timeout_secs))
             .build()
             .expect("reqwest client");
         Self {
             api_key,
-            api_base: API_BASE.to_string(),
+            api_base: api_base.unwrap_or_else(|| API_BASE.to_string()),
             user_agent,
             http,
         }

@@ -2,7 +2,7 @@
 
 use crossterm::{
     cursor::{Hide, Show},
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -24,7 +24,7 @@ use tokio::task::JoinHandle;
 
 type PendingMetricLoad = (u64, String, JoinHandle<Result<Value, String>>);
 
-/// TUI options (from --app, --tab, --refresh, --utc).
+/// TUI options (from --app, --tab, --refresh, --utc, --no-color).
 #[derive(Clone)]
 pub struct Options {
     pub app: Option<String>,
@@ -32,6 +32,23 @@ pub struct Options {
     pub refresh_secs: u64,
     /// If true, show timestamps in UTC; otherwise use local timezone.
     pub use_utc: bool,
+    pub no_color: bool,
+}
+
+fn accent_color(no_color: bool) -> Color {
+    if no_color {
+        Color::White
+    } else {
+        Color::Cyan
+    }
+}
+
+fn warning_color(no_color: bool) -> Color {
+    if no_color {
+        Color::White
+    } else {
+        Color::Yellow
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -503,34 +520,68 @@ fn insights_as_list(v: &Value) -> Vec<(String, Value)> {
     out
 }
 
-pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
-    let apps: Vec<Value> = client.list_apps(None).await.map_err(|e| e.to_string())?;
+#[allow(clippy::too_many_arguments)]
+fn apply_initial_app_selection(
+    opts: &Options,
+    app_list: &[Value],
+    current_app: &mut Option<(u64, String)>,
+    app_selected: &mut usize,
+    breadcrumb: &mut Vec<String>,
+    tab: &mut Tab,
+    tab_data: &mut TabData,
+    pending_tab_loads: &mut HashMap<(u64, Tab), JoinHandle<Result<TabPayload, String>>>,
+    loaded_tabs: &mut HashSet<(u64, Tab)>,
+    tab_errors: &mut HashMap<(u64, Tab), String>,
+    pending_metric_load: &mut Option<PendingMetricLoad>,
+    client: &Client,
+) -> Option<String> {
+    if let Some(ref app_arg) = opts.app {
+        if let Some((index, app_id, name)) = resolve_app(app_list, app_arg) {
+            *current_app = Some((app_id, name.clone()));
+            *app_selected = index;
+            *breadcrumb = vec![name];
+            *tab = opts.tab;
+            *tab_data = TabData::default();
+            loaded_tabs.clear();
+            tab_errors.clear();
+            if let Some((_, _, handle)) = pending_metric_load.take() {
+                handle.abort();
+            }
+            for (_, handle) in pending_tab_loads.drain() {
+                handle.abort();
+            }
+            start_tab_load(pending_tab_loads, client, app_id, *tab);
+            return None;
+        }
+        return Some(format!("App not found: {app_arg}"));
+    }
+    None
+}
 
-    let client = client.clone();
+pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
     enable_raw_mode().map_err(|e| e.to_string())?;
     execute!(io::stdout(), EnterAlternateScreen, Hide).map_err(|e| e.to_string())?;
     let _guard = TerminalGuard;
     let mut terminal = Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout()))
         .map_err(|e| e.to_string())?;
 
-    // If no --app, we need to show app picker first. Otherwise resolve app and go to app view.
-    let mut current_app: Option<(u64, String)> = opts
-        .app
-        .as_ref()
-        .and_then(|a| resolve_app(&apps, a).map(|(_, id, name)| (id, name)));
-    let app_list = apps;
-    let mut app_selected = opts
-        .app
-        .as_ref()
-        .and_then(|a| resolve_app(&app_list, a))
-        .map(|(i, _, _)| i)
-        .unwrap_or(0);
+    let client = client.clone();
+    let client_for_apps = client.clone();
+    let mut apps_task = Some(tokio::spawn(async move {
+        client_for_apps
+            .list_apps(None)
+            .await
+            .map_err(|error| error.to_string())
+    }));
+
+    let mut app_list: Vec<Value> = Vec::new();
+    let mut apps_ready = false;
+    let mut apps_error: Option<String> = None;
+    let mut current_app: Option<(u64, String)> = None;
+    let mut app_selected = 0usize;
 
     let mut tab = opts.tab;
-    let mut breadcrumb: Vec<String> = current_app
-        .as_ref()
-        .map(|(_, name)| vec![name.clone()])
-        .unwrap_or_else(|| vec!["Select app".to_string()]);
+    let mut breadcrumb: Vec<String> = vec!["Select app".to_string()];
     let mut tab_data: TabData = TabData::default();
     let mut selected = 0usize;
     let mut drill: Option<DrillContent> = None; // detail view content (metric series formatted at draw time with width)
@@ -548,13 +599,42 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
     let mut app_search_pending = String::new();
     let mut app_search_committed = String::new();
     let mut app_search_last_typed: Option<Instant> = None;
-
-    // If we have an app from --app, start loading initial tab in background.
-    if let Some((app_id, _)) = current_app {
-        start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
-    }
+    let mut show_help = false;
 
     loop {
+        if !apps_ready
+            && apps_error.is_none()
+            && apps_task
+                .as_ref()
+                .is_some_and(tokio::task::JoinHandle::is_finished)
+        {
+            let task = apps_task.take().expect("apps task finished");
+            match task.await {
+                Ok(Ok(apps)) => {
+                    app_list = apps;
+                    apps_ready = true;
+                    if let Some(error) = apply_initial_app_selection(
+                        &opts,
+                        &app_list,
+                        &mut current_app,
+                        &mut app_selected,
+                        &mut breadcrumb,
+                        &mut tab,
+                        &mut tab_data,
+                        &mut pending_tab_loads,
+                        &mut loaded_tabs,
+                        &mut tab_errors,
+                        &mut pending_metric_load,
+                        &client,
+                    ) {
+                        apps_error = Some(error);
+                    }
+                }
+                Ok(Err(error)) => apps_error = Some(error),
+                Err(error) => apps_error = Some(error.to_string()),
+            }
+        }
+
         // Apply completed tab loads.
         let finished_tab_keys: Vec<(u64, Tab)> = pending_tab_loads
             .iter()
@@ -622,7 +702,11 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
             app_selected = app_selected.min(len.saturating_sub(1));
         }
 
-        let loading_msg = if let Some((app_id, _)) = current_app {
+        let loading_msg = if let Some(error) = apps_error.as_ref() {
+            Some(format!("Error: {error}"))
+        } else if !apps_ready {
+            Some("Loading applications…".to_string())
+        } else if let Some((app_id, _)) = current_app {
             if let Some((metric_app_id, metric_name, _)) = pending_metric_load.as_ref() {
                 if *metric_app_id == app_id {
                     Some(format!("Loading metric {}…", metric_name))
@@ -646,16 +730,21 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
         };
 
         // Safety net: if current tab was not kicked off by a keypath, start it here.
-        if let Some((app_id, _)) = current_app {
-            if !loaded_tabs.contains(&(app_id, tab))
-                && !pending_tab_loads.contains_key(&(app_id, tab))
-                && pending_metric_load.is_none()
-            {
-                start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
+        if apps_ready && apps_error.is_none() {
+            if let Some((app_id, _)) = current_app {
+                if !loaded_tabs.contains(&(app_id, tab))
+                    && !pending_tab_loads.contains_key(&(app_id, tab))
+                    && pending_metric_load.is_none()
+                {
+                    start_tab_load(&mut pending_tab_loads, &client, app_id, tab);
+                }
             }
         }
 
-        let pending_count = pending_tab_loads.len() + usize::from(pending_metric_load.is_some());
+        let apps_pending = !apps_ready && apps_error.is_none();
+        let pending_count = pending_tab_loads.len()
+            + usize::from(pending_metric_load.is_some())
+            + usize::from(apps_pending);
         let loading_indicator = if pending_count > 0 {
             let frames = ["◐", "◓", "◑", "◒"];
             let idx =
@@ -680,6 +769,7 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
         );
 
         let use_utc = opts.use_utc;
+        let no_color = opts.no_color;
         terminal
             .draw(|f| {
                 draw_ui(
@@ -699,6 +789,8 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                     drill.as_ref(),
                     refresh_secs,
                     use_utc,
+                    no_color,
+                    show_help,
                 );
             })
             .map_err(|e| e.to_string())?;
@@ -708,8 +800,26 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
             && last_refresh.elapsed() >= std::time::Duration::from_secs(refresh_secs);
 
         if event::poll(poll_timeout).map_err(|e| e.to_string())? {
-            if let Event::Key(k) = event::read().map_err(|e| e.to_string())? {
-                match k.code {
+            if let Event::Key(key) = event::read().map_err(|e| e.to_string())? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                if !apps_ready || apps_error.is_some() {
+                    match key.code {
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            return Err("Interrupted.".to_string());
+                        }
+                        KeyCode::Char('q') => break,
+                        _ => continue,
+                    }
+                }
+                match key.code {
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        return Err("Interrupted.".to_string());
+                    }
+                    KeyCode::Char('?') => {
+                        show_help = !show_help;
+                    }
                     KeyCode::Char('q') => break,
                     KeyCode::Esc => {
                         if drill.is_some() {
@@ -1092,7 +1202,21 @@ fn draw_ui(
     drill: Option<&DrillContent>,
     _refresh_secs: u64,
     use_utc: bool,
+    no_color: bool,
+    show_help: bool,
 ) {
+    let accent = accent_color(no_color);
+    let warning = warning_color(no_color);
+    let root = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(if show_help { 4 } else { 1 }),
+        ])
+        .split(f.area());
+    let main_area = root[0];
+    let footer_area = root[1];
+
     let is_app_select = content_title.contains("Select an app");
     let has_project = breadcrumb.len() >= 2;
     let breadcrumb_height = if has_project { 2 } else { 1 };
@@ -1100,7 +1224,7 @@ fn draw_ui(
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(breadcrumb_height), Constraint::Min(1)])
-            .split(f.area())
+            .split(main_area)
     } else {
         Layout::default()
             .direction(Direction::Vertical)
@@ -1109,7 +1233,7 @@ fn draw_ui(
                 Constraint::Length(3),
                 Constraint::Min(1),
             ])
-            .split(f.area())
+            .split(main_area)
     };
     let breadcrumb_area = vertical[0];
     let content_area = vertical[vertical.len() - 1];
@@ -1118,7 +1242,7 @@ fn draw_ui(
         let line0 = format!("App: {}", breadcrumb[0]);
         let line1 = breadcrumb[1..].join(" > ");
         Paragraph::new(vec![Line::from(line0), Line::from(line1)])
-            .style(Style::default().fg(Color::Cyan))
+            .style(Style::default().fg(accent))
             .block(Block::default().borders(Borders::BOTTOM))
     } else {
         let bc_str = breadcrumb
@@ -1126,14 +1250,14 @@ fn draw_ui(
             .map(String::as_str)
             .unwrap_or("Select app");
         Paragraph::new(bc_str)
-            .style(Style::default().fg(Color::Cyan))
+            .style(Style::default().fg(accent))
             .block(Block::default().borders(Borders::BOTTOM))
     };
     f.render_widget(breadcrumb_block, breadcrumb_area);
     if let Some(indicator) = loading_indicator {
         let indicator_widget = Paragraph::new(indicator)
             .alignment(Alignment::Right)
-            .style(Style::default().fg(Color::Yellow));
+            .style(Style::default().fg(warning));
         f.render_widget(indicator_widget, breadcrumb_area);
     }
 
@@ -1148,11 +1272,11 @@ fn draw_ui(
                 .map(|name| Line::from(format!(" {} ", name))),
         )
         .select(tab_index)
-        .style(Style::default().fg(Color::Cyan))
+        .style(Style::default().fg(accent))
         .highlight_style(
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Cyan)
+                .bg(accent)
                 .add_modifier(Modifier::BOLD),
         );
         f.render_widget(tabs, vertical[1]);
@@ -1172,7 +1296,7 @@ fn draw_ui(
                 Block::default()
                     .title(content_title)
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(accent)),
             )
             .style(Style::default().fg(Color::White));
         f.render_widget(empty, content_area);
@@ -1202,10 +1326,19 @@ fn draw_ui(
                 Block::default()
                     .title(content_title)
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(accent)),
             );
         let mut state = ListState::default();
         state.select(list_selected);
         f.render_stateful_widget(list, content_area, &mut state);
     }
+
+    let footer_text = if show_help {
+        "q quit · Esc back · ↑↓ navigate · Enter open · ? toggle help\n\
+         h/l or ←→ tabs · type to filter apps on the app list"
+    } else {
+        "q quit · ↑↓ navigate · Enter open · ? help"
+    };
+    let footer = Paragraph::new(footer_text).style(Style::default().fg(accent));
+    f.render_widget(footer, footer_area);
 }

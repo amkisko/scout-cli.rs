@@ -1,8 +1,9 @@
 //! Home-directory configuration for secret-backend env vars.
 //!
 //! Reads `$SCOUT_HOME/config.env` and `$SCOUT_HOME/config.local.env` (default
-//! `~/.scout`). Process environment variables always win. Between files,
-//! `config.local.env` overrides `config.env`. Plain-text API keys are not loaded.
+//! `~/.config/scout`, with legacy `~/.scout` fallback). Project `.scout.env` or
+//! `.env` in the working directory is also loaded. Process environment variables
+//! always win. Plain-text API keys are not loaded.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -18,6 +19,7 @@ pub enum ConfigSource {
     Env,
     LocalFile,
     File,
+    ProjectFile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -83,7 +85,10 @@ const ALLOWED_CONFIG_KEYS: &[&str] = &[
     "SCOUT_KPXC_ATTRIBUTE",
 ];
 
-/// Resolve the Scout config directory (`SCOUT_HOME`, or `~/.scout` by default).
+/// Resolve the Scout config directory.
+///
+/// Precedence: `SCOUT_HOME`, then legacy `~/.scout` when it exists and XDG path does not,
+/// otherwise `$XDG_CONFIG_HOME/scout` (default `~/.config/scout`).
 pub fn scout_home() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("SCOUT_HOME") {
         let path = path.trim();
@@ -92,7 +97,19 @@ pub fn scout_home() -> Option<PathBuf> {
         }
     }
 
-    home_directory().map(|home| home.join(".scout"))
+    let home = home_directory()?;
+    let xdg_home = std::env::var("XDG_CONFIG_HOME")
+        .ok()
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| home.join(".config"));
+    let xdg_scout = xdg_home.join("scout");
+    let legacy = home.join(".scout");
+    if legacy.exists() && !xdg_scout.exists() {
+        Some(legacy)
+    } else {
+        Some(xdg_scout)
+    }
 }
 
 static HOME_CONFIG_ONCE: Once = Once::new();
@@ -104,12 +121,25 @@ pub fn config_file_path() -> Result<PathBuf, String> {
 }
 
 /// Resolve a friendly key (`op.entry_path`) or env key (`SCOUT_OP_ENTRY_PATH`).
-fn resolve_config_key(input: &str) -> Result<&'static ConfigKeyDef, String> {
+pub fn resolve_config_key(input: &str) -> Result<String, String> {
+    let input = input.trim();
+    CONFIG_KEY_DEFS
+        .iter()
+        .find(|def| def.friendly == input || def.env == input)
+        .map(|def| def.env.to_string())
+        .ok_or_else(|| format!("unknown config key: {input}"))
+}
+
+fn resolve_config_key_def(input: &str) -> Result<&'static ConfigKeyDef, String> {
     let input = input.trim();
     CONFIG_KEY_DEFS
         .iter()
         .find(|def| def.friendly == input || def.env == input)
         .ok_or_else(|| format!("unknown config key: {input}"))
+}
+
+pub fn friendly_config_key(input: &str) -> Result<String, String> {
+    resolve_config_key_def(input).map(|definition| definition.friendly.to_string())
 }
 
 /// List all known config keys with effective values and sources.
@@ -124,13 +154,13 @@ pub fn list_config_entries() -> Result<Vec<ConfigEntry>, String> {
 /// Read one config key's effective value.
 pub fn get_config_entry(input: &str) -> Result<ConfigEntry, String> {
     let home = scout_home().ok_or_else(|| "could not resolve scout home directory".to_string())?;
-    let def = resolve_config_key(input)?;
+    let def = resolve_config_key_def(input)?;
     Ok(entry_for_key(def, &home))
 }
 
 /// Write a config value to `config.env` (creates `SCOUT_HOME` when needed).
 pub fn set_config_entry(input: &str, value: &str) -> Result<ConfigEntry, String> {
-    let def = resolve_config_key(input)?;
+    let def = resolve_config_key_def(input)?;
     let value = value.trim();
     if value.is_empty() {
         return Err("config value must not be empty".to_string());
@@ -150,7 +180,7 @@ pub fn set_config_entry(input: &str, value: &str) -> Result<ConfigEntry, String>
 
 /// Remove a config value from `config.env`.
 pub fn unset_config_entry(input: &str) -> Result<(), String> {
-    let def = resolve_config_key(input)?;
+    let def = resolve_config_key_def(input)?;
     let home = scout_home().ok_or_else(|| "could not resolve scout home directory".to_string())?;
     let path = home.join(CONFIG_FILE);
     if !path.is_file() {
@@ -199,6 +229,17 @@ fn load_config_directory(home: &Path) -> Result<(), String> {
     let original_keys: HashSet<String> = std::env::vars().map(|(key, _)| key).collect();
     let mut merged = HashMap::new();
 
+    for file_name in project_config_file_names() {
+        if let Some(path) = project_config_path(file_name) {
+            if !path.is_file() {
+                continue;
+            }
+            let content = fs::read_to_string(&path)
+                .map_err(|error| format!("read {}: {error}", path.display()))?;
+            merged.extend(parse_config_content(&content));
+        }
+    }
+
     for file_name in [CONFIG_FILE, LOCAL_CONFIG_FILE] {
         let path = home.join(file_name);
         if !path.is_file() {
@@ -218,6 +259,16 @@ fn load_config_directory(home: &Path) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn project_config_file_names() -> [&'static str; 2] {
+    [".scout.env", ".env"]
+}
+
+fn project_config_path(file_name: &str) -> Option<PathBuf> {
+    std::env::current_dir()
+        .ok()
+        .map(|directory| directory.join(file_name))
 }
 
 fn parse_config_line(line: &str) -> Option<(String, String)> {
@@ -275,6 +326,17 @@ fn effective_value(env_key: &str, home: &Path) -> (Option<String>, Option<Config
         let entries = parse_config_content(&content);
         if let Some(value) = entries.get(env_key) {
             return (Some(value.clone()), Some(ConfigSource::File));
+        }
+    }
+
+    for file_name in project_config_file_names() {
+        if let Some(project_path) = project_config_path(file_name) {
+            if let Ok(content) = fs::read_to_string(project_path) {
+                let entries = parse_config_content(&content);
+                if let Some(value) = entries.get(env_key) {
+                    return (Some(value.clone()), Some(ConfigSource::ProjectFile));
+                }
+            }
         }
     }
 
@@ -360,10 +422,14 @@ mod tests {
 
     #[test]
     fn resolve_config_key_accepts_friendly_and_env_names() {
-        let def = resolve_config_key("op.entry_path").unwrap();
-        assert_eq!(def.env, "SCOUT_OP_ENTRY_PATH");
-        let def = resolve_config_key("SCOUT_BW_ITEM_ID").unwrap();
-        assert_eq!(def.friendly, "bw.item_id");
+        assert_eq!(
+            resolve_config_key("op.entry_path").unwrap(),
+            "SCOUT_OP_ENTRY_PATH"
+        );
+        assert_eq!(
+            friendly_config_key("SCOUT_BW_ITEM_ID").unwrap(),
+            "bw.item_id"
+        );
         assert!(resolve_config_key("api.key").is_err());
     }
 

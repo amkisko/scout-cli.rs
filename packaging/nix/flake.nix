@@ -14,7 +14,7 @@
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "scout-cli";
-          version = "0.2.0";
+          version = "0.3.0";
           src = self;
           cargoLock.lockFile = self + "/Cargo.lock";
           buildAndTestSubdir = "scout";

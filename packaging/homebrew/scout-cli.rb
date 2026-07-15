@@ -6,7 +6,7 @@
 class ScoutCli < Formula
   desc "ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors"
   homepage "https://github.com/amkisko/scout-cli.rs"
-  url "https://github.com/amkisko/scout-cli.rs/archive/refs/tags/v0.2.0.tar.gz"
+  url "https://github.com/amkisko/scout-cli.rs/archive/refs/tags/v0.3.0.tar.gz"
   # Fill before release: shasum -a 256 <(curl -sL https://github.com/amkisko/scout-cli.rs/archive/refs/tags/vX.Y.Z.tar.gz)
   sha256 ""
   license "MIT"
@@ -16,6 +16,10 @@ class ScoutCli < Formula
 
   def install
     system "cargo", "install", *std_cargo_args(path: "scout")
+    bash_completion.install shell_output("#{bin}/scout completions bash"), "scout"
+    zsh_completion.install shell_output("#{bin}/scout completions zsh"), "_scout"
+    fish_completion.install shell_output("#{bin}/scout completions fish"), "scout.fish"
+    man1.install shell_output("#{bin}/scout man"), "scout.1"
   end
 
   test do

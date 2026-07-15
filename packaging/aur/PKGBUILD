@@ -3,7 +3,7 @@
 # Submit to AUR and users install with: yay -S scout-cli
 
 pkgname=scout-cli
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors"
 arch=('x86_64' 'aarch64' 'i686')
@@ -28,4 +28,8 @@ package() {
   cd "$srcdir/scout-cli.rs-$pkgver"
   install -Dm755 "target/release/scout" "$pkgdir/usr/bin/scout"
   install -Dm644 LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 <("$pkgdir/usr/bin/scout" completions bash) "$pkgdir/usr/share/bash-completion/completions/scout"
+  install -Dm644 <("$pkgdir/usr/bin/scout" completions zsh) "$pkgdir/usr/share/zsh/site-functions/_scout"
+  install -Dm644 <("$pkgdir/usr/bin/scout" completions fish) "$pkgdir/usr/share/fish/vendor_completions.d/scout.fish"
+  install -Dm644 <("$pkgdir/usr/bin/scout" man) "$pkgdir/usr/share/man/man1/scout.1"
 }

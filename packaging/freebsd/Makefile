@@ -6,7 +6,7 @@
 
 PORTNAME=	scout-cli
 DISTVERSIONPREFIX=	v
-DISTVERSION=	0.2.0
+DISTVERSION=	0.3.0
 CATEGORIES=	sysutils
 MAINTAINER=	contact@kiskolabs.com
 COMMENT=	ScoutAPM CLI - query apps, endpoints, traces, metrics, and errors

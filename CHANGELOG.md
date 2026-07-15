@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 0.3.0 (2026-07-15)
+
+- Add local archive: `archive pull`, `status`, `path`, `trace`, and `export` (csv, prometheus, ndjson, parquet) under `$SCOUT_ARCHIVE_HOME` (default `{SCOUT_HOME}/archive`).
+- Add `scout diff` to compare archived endpoint, metric, error, and job snapshots without API calls.
+- Add `scout batch` to run multiple operations from a JSON plan with per-operation results on stdout.
+- Add `scout completions` (bash, zsh, fish) and `scout man`; Homebrew and AUR packages install them.
+- Add `--plain` for script-stable tab-separated output and `--json` for compact JSON; set default via `SCOUT_OUTPUT`.
+- Add global flags `--quiet`, `--verbose`, `--debug`, `--no-color`, `--no-input`, `--timeout`, `--api-base`, and `--app-id`.
+- Map failures to script-friendly exit codes: usage (2), auth (3), API (4), I/O (5).
+- Extend interactive TUI with `--tab`, `--refresh`, `--utc`, and local-time timestamps by default.
+- Add `scout config --dry-run` to preview config writes.
+
 ## 0.2.0 (2026-07-15)
 
 - Add background job commands: `jobs`, `job-metrics`, `job-metric`, `job-traces`.

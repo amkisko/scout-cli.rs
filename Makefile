@@ -1,4 +1,4 @@
-.PHONY: lint build install fmt clippy sync-packaging check-packaging release
+.PHONY: lint build install fmt clippy test sync-packaging check-packaging release
 
 CARGO ?= cargo
 
@@ -12,6 +12,9 @@ clippy:
 
 build:
 	$(CARGO) build --workspace
+
+test:
+	$(CARGO) test --workspace
 
 install:
 	$(CARGO) install --path scout --locked
