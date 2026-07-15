@@ -213,8 +213,8 @@ fn workspace_members(root: &Path) -> Result<Vec<String>, String> {
 }
 
 fn collect_rust_files(directory: &Path, sources: &mut Vec<PathBuf>) -> Result<(), String> {
-    for entry in fs::read_dir(directory)
-        .map_err(|error| format!("read {}: {error}", directory.display()))?
+    for entry in
+        fs::read_dir(directory).map_err(|error| format!("read {}: {error}", directory.display()))?
     {
         let entry = entry.map_err(|error| format!("read {}: {error}", directory.display()))?;
         let path = entry.path();

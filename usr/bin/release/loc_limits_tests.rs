@@ -24,7 +24,10 @@ fn fixture_root(label: &str) -> PathBuf {
         &root.join("Cargo.toml"),
         "[workspace]\nmembers = [\"demo\"]\n",
     );
-    write_file(&root.join("demo/Cargo.toml"), "[package]\nname = \"demo\"\n");
+    write_file(
+        &root.join("demo/Cargo.toml"),
+        "[package]\nname = \"demo\"\n",
+    );
     root
 }
 
@@ -62,10 +65,7 @@ fn errors_when_baselined_file_grows() {
         .map(|index| format!("let _ = {index};"))
         .collect::<Vec<_>>();
     write_file(&root.join("demo/src/legacy.rs"), &lines.join("\n"));
-    write_file(
-        &root.join(BASELINE_FILE),
-        "demo/src/legacy.rs\t304\n",
-    );
+    write_file(&root.join(BASELINE_FILE), "demo/src/legacy.rs\t304\n");
 
     let report = check_loc_limits(&root).expect("check loc limits");
     assert_eq!(report.errors.len(), 1);
