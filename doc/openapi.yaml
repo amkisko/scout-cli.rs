@@ -106,7 +106,15 @@ paths:
   /apps/{id}/endpoints:
     get:
       summary: List application endpoints
-      description: Returns a list of all endpoints for the application
+      description: >
+        Returns a list of endpoints for the application.
+
+
+        With no `sort_by`/`limit`/`offset` parameters the full listing is
+        returned as an array in `results` (original ordering preserved), exactly
+        as before. When any of those parameters is supplied, `results` becomes an
+        object with `endpoints`, `count`, `total_count`, and `has_more` for
+        pagination.
       operationId: listEndpoints
       tags:
         - Endpoints
@@ -114,13 +122,20 @@ paths:
         - $ref: '#/components/parameters/AppId'
         - $ref: '#/components/parameters/FromTimestamp'
         - $ref: '#/components/parameters/ToTimestamp'
+        - $ref: '#/components/parameters/EndpointSortBy'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
       responses:
         '200':
-          description: Successful response
+          description: >
+            Successful response. The `results` shape depends on whether
+            pagination parameters were supplied (see the operation description).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EndpointsListResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/EndpointsListResponse'
+                  - $ref: '#/components/schemas/PaginatedEndpointsListResponse'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -174,6 +189,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TracesListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/jobs:
+    get:
+      summary: List background jobs
+      description: Returns a list of all background jobs for the application with performance metrics
+      operationId: listJobs
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/jobs/{job_id}/metrics:
+    get:
+      summary: List available job metrics
+      description: Returns a list of available metric types for background jobs
+      operationId: listJobMetrics
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobMetricsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /apps/{id}/jobs/{job_id}/metrics/{metric_type}:
+    get:
+      summary: Get job metrics
+      description: Returns metric data for a specific background job
+      operationId: getJobMetrics
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/JobMetricType'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricDataResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/jobs/{job_id}/traces:
+    get:
+      summary: List traces for job
+      description: Returns traces for a specific background job (max 100, within 7 days)
+      operationId: listJobTraces
+      tags:
+        - Jobs
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobTracesListResponse'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -296,6 +411,78 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/anomaly_events:
+    get:
+      summary: List anomaly events
+      description: Returns anomaly events for the application overlapping the given timeframe (max 100, within 30 days)
+      operationId: listAnomalyEvents
+      tags:
+        - Anomalies
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/FromTimestamp'
+        - $ref: '#/components/parameters/ToTimestamp'
+        - name: state
+          in: query
+          required: false
+          description: Filter by event state
+          schema:
+            type: string
+            enum: [open, closed, all]
+            default: all
+        - name: metric
+          in: query
+          required: false
+          description: Filter by metric (e.g., response_time, error_rate)
+          schema:
+            type: string
+        - name: endpoint
+          in: query
+          required: false
+          description: Filter by endpoint name (exact match)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyEventsListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /apps/{id}/anomaly_events/{anomaly_event_id}:
+    get:
+      summary: Get anomaly event details
+      description: Returns details for a specific anomaly event, including joined smart monitor and deploy context
+      operationId: getAnomalyEvent
+      tags:
+        - Anomalies
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: anomaly_event_id
+          in: path
+          required: true
+          description: Anomaly event identifier
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyEventDetailResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /apps/{id}/insights:
     get:
@@ -504,7 +691,7 @@ components:
       schema:
         type: string
         format: date-time
-        example: 2026-02-09T14:55:29Z
+        example: 2026-07-14T11:16:49Z
 
     ToTimestamp:
       name: to
@@ -514,8 +701,62 @@ components:
       schema:
         type: string
         format: date-time
-        example: 2026-02-10T14:55:29Z
-    
+        example: 2026-07-15T11:16:49Z
+
+    EndpointSortBy:
+      name: sort_by
+      in: query
+      required: false
+      description: >
+        Sort the listing in descending order by this field. Omit to preserve the
+        listing's natural ordering. Supplying this switches the response to the
+        paginated shape.
+      schema:
+        type: string
+        enum: [time_consumed, response_time, throughput, error_rate]
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: >
+        Maximum number of endpoints to return. Omit for the full listing (no
+        default limit). Supplying this switches the response to the paginated
+        shape.
+      schema:
+        type: integer
+        minimum: 1
+        example: 50
+
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: >
+        Number of endpoints to skip, for pagination. Supplying this switches the
+        response to the paginated shape.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      description: Base64 URL-encoded job identifier (e.g., ZGVmYXVsdC9EdW1teVdvcmtlcg== [default/DummyWorker])
+      schema:
+        type: string
+
+    JobMetricType:
+      name: metric_type
+      in: path
+      required: true
+      description: Type of job metric to retrieve
+      schema:
+        type: string
+        enum: [throughput, execution_time, latency, errors, allocations]
+
     InsightType:
       name: type
       in: path
@@ -691,6 +932,145 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Endpoint'
+      required:
+        - header
+        - results
+
+    PaginatedEndpointsListResponse:
+      type: object
+      description: >
+        Returned when any of sort_by/limit/offset is supplied.
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            endpoints:
+              type: array
+              items:
+                $ref: '#/components/schemas/Endpoint'
+            count:
+              type: integer
+              description: Number of endpoints in this page
+            total_count:
+              type: integer
+              description: Total number of endpoints across all pages
+            has_more:
+              type: boolean
+              description: Whether more endpoints exist beyond this page
+          required:
+            - endpoints
+            - count
+            - total_count
+            - has_more
+      required:
+        - header
+        - results
+
+    Job:
+      type: object
+      properties:
+        full_name:
+          type: string
+          example: "default/DummyWorker"
+        name:
+          type: string
+          example: "DummyWorker"
+        queue:
+          type: string
+          example: "default"
+        job_id:
+          type: string
+          description: Base64 URL-encoded job identifier for use with other endpoints
+        throughput:
+          type: number
+          description: Jobs per minute
+        execution_time:
+          type: number
+          description: Average execution time in milliseconds
+        time_consumed:
+          type: number
+          description: Fraction of total job time consumed by this job
+        latency:
+          type: number
+          description: Average queue latency in seconds
+      required:
+        - full_name
+        - name
+        - queue
+        - throughput
+        - execution_time
+
+    JobsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+      required:
+        - header
+        - results
+
+    JobMetricsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            availableMetrics:
+              type: array
+              items:
+                type: string
+                enum: [throughput, execution_time, latency, errors, allocations]
+          required:
+            - availableMetrics
+      required:
+        - header
+        - results
+
+    JobTrace:
+      type: object
+      properties:
+        id:
+          type: integer
+        time:
+          type: string
+          format: date-time
+        duration:
+          type: number
+          description: Execution duration in milliseconds
+        name:
+          type: string
+          description: Job class name
+        queue:
+          type: string
+          description: Queue name
+        metric_name:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+
+    JobTracesListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            traces:
+              type: array
+              items:
+                $ref: '#/components/schemas/JobTrace'
+          required:
+            - traces
       required:
         - header
         - results
@@ -913,6 +1293,124 @@ components:
                 $ref: '#/components/schemas/Error'
           required:
             - errors
+      required:
+        - header
+        - results
+
+    AnomalyEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        metric:
+          type: string
+        endpoint:
+          type: string
+          nullable: true
+        direction:
+          type: string
+          enum: [high, low]
+        severity:
+          type: string
+          enum: [warning, critical]
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+        z_score:
+          type: number
+        current_value:
+          type: number
+        baseline_value:
+          type: number
+        multiplier:
+          type: number
+          nullable: true
+        open:
+          type: boolean
+        description:
+          type: string
+        smart_monitor_id:
+          type: integer
+          nullable: true
+        deploy_id:
+          type: integer
+          nullable: true
+
+    AnomalyEventDetail:
+      allOf:
+        - $ref: '#/components/schemas/AnomalyEvent'
+        - type: object
+          properties:
+            baseline_std_dev:
+              type: number
+              nullable: true
+            duration_minutes:
+              type: integer
+              nullable: true
+            smart_monitor:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+                kind:
+                  type: string
+                severity_threshold:
+                  type: number
+                  format: float
+                duration_minutes:
+                  type: integer
+            deploy:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: integer
+                sha:
+                  type: string
+                deployed_at:
+                  type: string
+                  format: date-time
+
+    AnomalyEventsListResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            anomaly_events:
+              type: array
+              items:
+                $ref: '#/components/schemas/AnomalyEvent'
+          required:
+            - anomaly_events
+      required:
+        - header
+        - results
+
+    AnomalyEventDetailResponse:
+      type: object
+      properties:
+        header:
+          $ref: '#/components/schemas/StandardHeader'
+        results:
+          type: object
+          properties:
+            anomaly_event:
+              $ref: '#/components/schemas/AnomalyEventDetail'
+          required:
+            - anomaly_event
       required:
         - header
         - results
@@ -1169,6 +1667,8 @@ tags:
     description: Operations for retrieving application metrics
   - name: Endpoints
     description: Operations for endpoint monitoring
+  - name: Jobs
+    description: Operations for background job monitoring
   - name: Traces
     description: Operations for trace analysis
   - name: Errors

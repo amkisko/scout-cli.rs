@@ -84,6 +84,12 @@ enum Commands {
         to: Option<String>,
         #[arg(long)]
         range: Option<String>,
+        #[arg(long, value_parser = ["time_consumed", "response_time", "throughput", "error_rate"])]
+        sort_by: Option<String>,
+        #[arg(long)]
+        limit: Option<u32>,
+        #[arg(long)]
+        offset: Option<u32>,
     },
     /// Get metric data for a specific endpoint
     EndpointMetric {
@@ -109,8 +115,62 @@ enum Commands {
         #[arg(long)]
         range: Option<String>,
     },
+    /// List background jobs
+    Jobs {
+        app_id: u64,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        range: Option<String>,
+    },
+    /// List available job metrics
+    JobMetrics { app_id: u64, job_id: String },
+    /// Get job metrics
+    JobMetric {
+        app_id: u64,
+        job_id: String,
+        #[arg(value_parser = ["throughput", "execution_time", "latency", "errors", "allocations"])]
+        metric_type: String,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        range: Option<String>,
+    },
+    /// List traces for a job (max 100, within 7 days)
+    JobTraces {
+        app_id: u64,
+        job_id: String,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        range: Option<String>,
+    },
     /// Fetch a trace
     Trace { app_id: u64, trace_id: u64 },
+    /// List anomaly events (max 100, within 30 days)
+    AnomalyEvents {
+        app_id: u64,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        range: Option<String>,
+        #[arg(long, value_parser = ["open", "closed", "all"])]
+        state: Option<String>,
+        #[arg(long)]
+        metric: Option<String>,
+        #[arg(long)]
+        endpoint: Option<String>,
+    },
+    /// Show one anomaly event
+    AnomalyEvent { app_id: u64, anomaly_event_id: u64 },
     /// List error groups
     Errors {
         app_id: u64,
@@ -282,9 +342,20 @@ async fn run(client: &Client, cmd: Commands, format: output::OutputFormat) -> Re
             from,
             to,
             range,
+            sort_by,
+            limit,
+            offset,
         } => {
             let data = client
-                .list_endpoints(app_id, from.as_deref(), to.as_deref(), range.as_deref())
+                .list_endpoints(
+                    app_id,
+                    from.as_deref(),
+                    to.as_deref(),
+                    range.as_deref(),
+                    sort_by.as_deref(),
+                    limit,
+                    offset,
+                )
                 .await
                 .map_err(|e| e.to_string())?;
             print_value(&data);
@@ -329,12 +400,104 @@ async fn run(client: &Client, cmd: Commands, format: output::OutputFormat) -> Re
                 .map_err(|e| e.to_string())?;
             print_value(&data);
         }
+        Commands::Jobs {
+            app_id,
+            from,
+            to,
+            range,
+        } => {
+            let data = client
+                .list_jobs(app_id, from.as_deref(), to.as_deref(), range.as_deref())
+                .await
+                .map_err(|e| e.to_string())?;
+            print_value(&data);
+        }
+        Commands::JobMetrics { app_id, job_id } => {
+            let list = client
+                .list_job_metrics(app_id, &job_id)
+                .await
+                .map_err(|e| e.to_string())?;
+            print_value(&serde_json::to_value(&list).unwrap());
+        }
+        Commands::JobMetric {
+            app_id,
+            job_id,
+            metric_type,
+            from,
+            to,
+            range,
+        } => {
+            let data = client
+                .get_job_metrics(
+                    app_id,
+                    &job_id,
+                    &metric_type,
+                    from.as_deref(),
+                    to.as_deref(),
+                    range.as_deref(),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            print_value(&data);
+        }
+        Commands::JobTraces {
+            app_id,
+            job_id,
+            from,
+            to,
+            range,
+        } => {
+            let data = client
+                .list_job_traces(
+                    app_id,
+                    &job_id,
+                    from.as_deref(),
+                    to.as_deref(),
+                    range.as_deref(),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            print_value(&data);
+        }
         Commands::Trace { app_id, trace_id } => {
             let trace = client
                 .fetch_trace(app_id, trace_id)
                 .await
                 .map_err(|e| e.to_string())?;
             print_value(&trace);
+        }
+        Commands::AnomalyEvents {
+            app_id,
+            from,
+            to,
+            range,
+            state,
+            metric,
+            endpoint,
+        } => {
+            let list = client
+                .list_anomaly_events(
+                    app_id,
+                    from.as_deref(),
+                    to.as_deref(),
+                    range.as_deref(),
+                    state.as_deref(),
+                    metric.as_deref(),
+                    endpoint.as_deref(),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            print_value(&serde_json::to_value(&list).unwrap());
+        }
+        Commands::AnomalyEvent {
+            app_id,
+            anomaly_event_id,
+        } => {
+            let event = client
+                .get_anomaly_event(app_id, anomaly_event_id)
+                .await
+                .map_err(|e| e.to_string())?;
+            print_value(&event);
         }
         Commands::Errors {
             app_id,

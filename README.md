@@ -4,8 +4,6 @@
 
 ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors from the terminal.
 
-Sponsored by [Kisko Labs](https://www.kiskolabs.com).
-
 ## Requirements
 
 - Rust 1.70+ (for building from source), or use a pre-built package below.
@@ -107,11 +105,22 @@ scout metric 123 errors --from 2025-01-01T00:00:00Z --to 2025-01-02T00:00:00Z
 
 # Endpoints
 scout endpoints 123 --range 1day
+scout endpoints 123 --range 1day --sort-by response_time --limit 50 --offset 0
 scout endpoint-metric 123 <endpoint_id> response_time --range 7days
 scout endpoint-traces 123 <endpoint_id> --range 1day
 
+# Jobs (background jobs)
+scout jobs 123 --range 1day
+scout job-metrics 123 <job_id>
+scout job-metric 123 <job_id> execution_time --range 7days
+scout job-traces 123 <job_id> --range 1day
+
 # Traces
 scout trace 123 456
+
+# Anomaly events
+scout anomaly-events 123 --range 7days [--state open|closed|all] [--metric response_time] [--endpoint "Controller#action"]
+scout anomaly-event 123 456
 
 # Errors
 scout errors 123 [--from ...] [--to ...] [--endpoint <base64>]
@@ -169,3 +178,7 @@ If you discover a security vulnerability, please report it responsibly. **Do not
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).
+
+## Sponsors
+
+Sponsored by [Kisko Labs](https://www.kiskolabs.com).

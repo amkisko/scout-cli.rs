@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.2.0 (2026-07-15)
+
+- Add background job commands: `jobs`, `job-metrics`, `job-metric`, `job-traces`.
+- Add anomaly event commands: `anomaly-events`, `anomaly-event` (filter by state, metric, or endpoint).
+- Add endpoint listing options `--sort-by`, `--limit`, and `--offset` for sorted, paginated results.
+- Extend `parse-url` to recognize job and job trace ScoutAPM URLs.
+
 ## 0.1.0 (2025-02-10)
 
 - ScoutAPM API client library (`scout_lib`): apps, metrics, endpoints, traces, error groups, insights.
