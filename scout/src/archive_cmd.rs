@@ -46,16 +46,7 @@ pub async fn archive_command_value(
             from,
             to,
             output,
-        } => archive_export_value(
-            app,
-            resource,
-            format,
-            metric,
-            date,
-            from,
-            to,
-            output,
-        ),
+        } => archive_export_value(app, resource, format, metric, date, from, to, output),
         ArchiveCommands::Pull {
             app,
             from,
@@ -185,11 +176,7 @@ async fn archive_trace_value(
     let app_id = app.resolve()?;
     let mut store = ArchiveStore::from_env()?;
     let action = run_cancellable(pull_trace_by_id(
-        client,
-        &mut store,
-        app_id,
-        trace_id,
-        force,
+        client, &mut store, app_id, trace_id, force,
     ))
     .await?;
     store.save_manifest()?;
@@ -246,7 +233,9 @@ pub fn run_archive_local_command(
             from,
             to,
             output,
-        } => run_export(app, resource, format, metric, date, from, to, output, context),
+        } => run_export(
+            app, resource, format, metric, date, from, to, output, context,
+        ),
         ArchiveCommands::Pull {
             app,
             from,
@@ -340,11 +329,7 @@ pub async fn run_archive_trace(
         eprintln!("Archiving trace {trace_id} for app {app_id}");
     }
     let action = run_cancellable(pull_trace_by_id(
-        client,
-        &mut store,
-        app_id,
-        trace_id,
-        force,
+        client, &mut store, app_id, trace_id, force,
     ))
     .await?;
     store.save_manifest()?;
@@ -360,7 +345,9 @@ pub async fn run_archive_trace(
     output::emit_value(context.mode, &value).map_err(|error| error.to_string())
 }
 
-async fn run_cancellable<T>(future: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
+async fn run_cancellable<T>(
+    future: impl std::future::Future<Output = Result<T, String>>,
+) -> Result<T, String> {
     tokio::select! {
         result = future => result,
         _ = tokio::signal::ctrl_c() => Err("Interrupted.".to_string()),

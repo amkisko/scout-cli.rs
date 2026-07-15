@@ -108,9 +108,7 @@ pub fn keepassxc_configured() -> bool {
 }
 
 fn one_password_entry_path_includes_field(entry_path: &str) -> bool {
-    let rest = entry_path
-        .strip_prefix("op://")
-        .unwrap_or(entry_path);
+    let rest = entry_path.strip_prefix("op://").unwrap_or(entry_path);
     rest.split('/')
         .map(str::trim)
         .filter(|segment| !segment.is_empty())
@@ -266,14 +264,7 @@ pub fn keepassxc_attempt() -> BackendAttempt {
     }
     run_cmd_with_diagnostics(
         "KeePassXC",
-        &[
-            "keepassxc-cli",
-            "show",
-            "-a",
-            attribute,
-            &database,
-            &entry,
-        ],
+        &["keepassxc-cli", "show", "-a", attribute, &database, &entry],
         &[],
     )
 }

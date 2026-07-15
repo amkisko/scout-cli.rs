@@ -16,7 +16,10 @@ pub fn run_diff_command(command: DiffCommands, context: &DiffContext) -> Result<
     emit_diff_report(context, &report)
 }
 
-pub fn diff_command_value(command: DiffCommands, _context: &DiffContext) -> Result<serde_json::Value, String> {
+pub fn diff_command_value(
+    command: DiffCommands,
+    _context: &DiffContext,
+) -> Result<serde_json::Value, String> {
     let report = diff_command_report(command)?;
     serde_json::to_value(report).map_err(|error| error.to_string())
 }
@@ -112,14 +115,8 @@ fn range_diff_report(
 ) -> Result<DiffReport, String> {
     let app_id = app.resolve()?;
     let store = ArchiveStore::from_env()?;
-    let left = load_range_snapshot_with_hint(
-        &store,
-        app_id,
-        resource,
-        &left_from,
-        &left_to,
-        &left_label,
-    )?;
+    let left =
+        load_range_snapshot_with_hint(&store, app_id, resource, &left_from, &left_to, &left_label)?;
     let right = load_range_snapshot_with_hint(
         &store,
         app_id,
@@ -144,20 +141,10 @@ fn metric_diff_report(
 ) -> Result<DiffReport, String> {
     let app_id = app.resolve()?;
     let store = ArchiveStore::from_env()?;
-    let left_bucket = load_metric_bucket_with_hint(
-        &store,
-        app_id,
-        metric_type,
-        &left_date,
-        &left_label,
-    )?;
-    let right_bucket = load_metric_bucket_with_hint(
-        &store,
-        app_id,
-        metric_type,
-        &right_date,
-        &right_label,
-    )?;
+    let left_bucket =
+        load_metric_bucket_with_hint(&store, app_id, metric_type, &left_date, &left_label)?;
+    let right_bucket =
+        load_metric_bucket_with_hint(&store, app_id, metric_type, &right_date, &right_label)?;
     let left_name = left_label.unwrap_or_else(|| left_date.clone());
     let right_name = right_label.unwrap_or_else(|| right_date.clone());
     Ok(diff_metric_buckets(
@@ -179,13 +166,15 @@ fn load_range_snapshot_with_hint(
 ) -> Result<RangeSnapshotFile, String> {
     store
         .load_range_snapshot(app_id, resource, from, to)
-        .map_err(|error| archive_load_hint(
-            error,
-            app_id,
-            resource,
-            &format!("{from} .. {to}"),
-            label.as_deref(),
-        ))
+        .map_err(|error| {
+            archive_load_hint(
+                error,
+                app_id,
+                resource,
+                &format!("{from} .. {to}"),
+                label.as_deref(),
+            )
+        })
 }
 
 fn load_metric_bucket_with_hint(
@@ -197,13 +186,15 @@ fn load_metric_bucket_with_hint(
 ) -> Result<MetricBucket, String> {
     store
         .load_metric_bucket(app_id, metric_type, date)
-        .map_err(|error| archive_load_hint(
-            error,
-            app_id,
-            &format!("metrics/{metric_type}"),
-            date,
-            label.as_deref(),
-        ))
+        .map_err(|error| {
+            archive_load_hint(
+                error,
+                app_id,
+                &format!("metrics/{metric_type}"),
+                date,
+                label.as_deref(),
+            )
+        })
 }
 
 fn archive_load_hint(
@@ -216,9 +207,7 @@ fn archive_load_hint(
     if !looks_like_missing_archive(&error) {
         return error;
     }
-    let side = label
-        .map(|name| format!(" ({name})"))
-        .unwrap_or_default();
+    let side = label.map(|name| format!(" ({name})")).unwrap_or_default();
     format!(
         "{error}\nHint: no archived {resource} data for app {app_id}{side} ({window}). \
          Run `scout archive pull {app_id} --range 1day` or `scout archive status {app_id}`."

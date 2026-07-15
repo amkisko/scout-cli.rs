@@ -1,7 +1,7 @@
 //! Compare archived ScoutAPM snapshots from local storage.
 
-use crate::archive::store::RangeSnapshotFile;
 use crate::archive::metrics::MetricBucket;
+use crate::archive::store::RangeSnapshotFile;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -61,7 +61,12 @@ pub fn diff_endpoints(
                 .unwrap_or("unknown")
                 .to_string()
         },
-        &["response_time", "throughput", "error_rate", "95th_percentile"],
+        &[
+            "response_time",
+            "throughput",
+            "error_rate",
+            "95th_percentile",
+        ],
     )
 }
 
@@ -252,10 +257,7 @@ fn diff_range_records(
     }
 }
 
-fn records_map(
-    records: &[Value],
-    record_key: fn(&Value) -> String,
-) -> BTreeMap<String, Value> {
+fn records_map(records: &[Value], record_key: fn(&Value) -> String) -> BTreeMap<String, Value> {
     let mut map = BTreeMap::new();
     for record in records {
         map.insert(record_key(record), record.clone());
@@ -314,9 +316,11 @@ fn numeric_field(record: &Value, field: &str) -> Option<f64> {
     if field == "95th_percentile" {
         return record.get("95th_percentile").and_then(Value::as_f64);
     }
-    record
-        .get(field)
-        .and_then(|value| value.as_f64().or_else(|| value.as_i64().map(|number| number as f64)))
+    record.get(field).and_then(|value| {
+        value
+            .as_f64()
+            .or_else(|| value.as_i64().map(|number| number as f64))
+    })
 }
 
 fn metric_series_map(series: &Value) -> BTreeMap<String, f64> {
@@ -402,18 +406,14 @@ mod tests {
             }),
         };
         let report = diff_errors(&left, &right, "left", "right");
-        assert!(
-            report
-                .changes
-                .iter()
-                .any(|change| change.key.contains("NoMethodError") && change.delta == Some(7.0))
-        );
-        assert!(
-            report
-                .changes
-                .iter()
-                .any(|change| change.status == "added" && change.key.contains("Timeout"))
-        );
+        assert!(report
+            .changes
+            .iter()
+            .any(|change| change.key.contains("NoMethodError") && change.delta == Some(7.0)));
+        assert!(report
+            .changes
+            .iter()
+            .any(|change| change.status == "added" && change.key.contains("Timeout")));
     }
 
     #[test]

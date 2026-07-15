@@ -363,7 +363,10 @@ async fn pull_app_metadata(
     app_id: u64,
     force: bool,
 ) -> Result<StoreAction, String> {
-    let app = client.get_app(app_id).await.map_err(|error| error.to_string())?;
+    let app = client
+        .get_app(app_id)
+        .await
+        .map_err(|error| error.to_string())?;
     store.store_app_metadata(app_id, app, force)
 }
 
@@ -467,15 +470,7 @@ async fn pull_anomalies(
         return Ok(StoreAction::Skipped);
     }
     let events = client
-        .list_anomaly_events(
-            app_id,
-            Some(from),
-            Some(to),
-            None,
-            Some("all"),
-            None,
-            None,
-        )
+        .list_anomaly_events(app_id, Some(from), Some(to), None, Some("all"), None, None)
         .await
         .map_err(|error| error.to_string())?;
     let data = json!({ "anomaly_events": events });
@@ -544,7 +539,8 @@ async fn pull_traces_for_range(
         pull_endpoints(client, store, app_id, from, to).await?;
         store.load_range_snapshot(app_id, "endpoints", from, to)?
     };
-    let endpoint_ids = endpoint_ids_from_snapshot(&endpoints_snapshot.data, options.trace_endpoint_limit);
+    let endpoint_ids =
+        endpoint_ids_from_snapshot(&endpoints_snapshot.data, options.trace_endpoint_limit);
     let mut report = TracePullReport::default();
     for endpoint_id in endpoint_ids {
         let listing = client

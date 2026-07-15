@@ -45,7 +45,14 @@ Run `scout help <command>` for command-specific examples.";
 )]
 pub struct Cli {
     /// Output format: plain (human-readable) or json (pretty JSON).
-    #[arg(short, long, global = true, default_value = "plain", value_enum, env = "SCOUT_OUTPUT")]
+    #[arg(
+        short,
+        long,
+        global = true,
+        default_value = "plain",
+        value_enum,
+        env = "SCOUT_OUTPUT"
+    )]
     pub output: OutputFormatArg,
 
     /// Emit compact JSON (scripts). Overrides --output.
@@ -97,7 +104,13 @@ pub struct Cli {
     pub app: Option<String>,
 
     /// Initial tab when opening an app in the interactive TUI.
-    #[arg(long, default_value = "endpoints", value_enum, global = true, hide = true)]
+    #[arg(
+        long,
+        default_value = "endpoints",
+        value_enum,
+        global = true,
+        hide = true
+    )]
     pub tab: TuiTabArg,
 
     /// Auto-refresh interval in seconds in the interactive TUI (0 = off).
@@ -151,7 +164,10 @@ pub fn resolve_app_id(positional: u64, flag: Option<u64>) -> Result<u64, String>
 #[derive(Clone, Subcommand)]
 pub enum Commands {
     /// List applications
-    #[command(visible_alias = "ls", after_help = "Examples:\n  scout apps\n  scout apps --active-since 2025-01-01T00:00:00Z")]
+    #[command(
+        visible_alias = "ls",
+        after_help = "Examples:\n  scout apps\n  scout apps --active-since 2025-01-01T00:00:00Z"
+    )]
     #[command(next_help_heading = "Apps")]
     Apps {
         #[arg(long)]
@@ -596,14 +612,15 @@ pub enum ArchiveCommands {
         metric: Vec<String>,
         #[arg(long, help = "Re-fetch even when a snapshot already exists")]
         force: bool,
-        #[arg(
-            long,
-            help = "Continue from the last successful pull (1 hour overlap)"
-        )]
+        #[arg(long, help = "Continue from the last successful pull (1 hour overlap)")]
         incremental: bool,
         #[arg(long = "trace-id", help = "Fetch specific trace IDs (repeatable)")]
         trace_id: Vec<u64>,
-        #[arg(long, default_value = "50", help = "Max endpoints to scan when pulling traces")]
+        #[arg(
+            long,
+            default_value = "50",
+            help = "Max endpoints to scan when pulling traces"
+        )]
         trace_endpoint_limit: u32,
         #[arg(short = 'n', long, help = "Preview pull plan without calling the API")]
         dry_run: bool,

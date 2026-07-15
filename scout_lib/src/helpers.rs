@@ -66,7 +66,9 @@ fn collect_backend_diagnostics() -> Vec<String> {
         match attempt {
             crate::secret::BackendAttempt::NotConfigured => {}
             crate::secret::BackendAttempt::Success => {}
-            crate::secret::BackendAttempt::Failed(reason) => lines.push(format!("{name}: {reason}")),
+            crate::secret::BackendAttempt::Failed(reason) => {
+                lines.push(format!("{name}: {reason}"))
+            }
         }
     }
     lines

@@ -81,10 +81,7 @@ pub fn print_concise_usage(command: Option<&str>, summary: &str, examples: &[&st
     }
     match command {
         Some(name) => {
-            let _ = writeln!(
-                io::stderr(),
-                "\nRun `scout {name} --help` for all options."
-            );
+            let _ = writeln!(io::stderr(), "\nRun `scout {name} --help` for all options.");
         }
         None => {
             let _ = writeln!(io::stderr(), "\nRun `scout --help` for all options.");

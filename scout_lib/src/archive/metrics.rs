@@ -44,17 +44,12 @@ pub fn merge_series_into_buckets(
                 continue;
             };
             let date = parsed_time.format("%Y-%m-%d").to_string();
-            let bucket = buckets
-                .entry(date.clone())
-                .or_insert_with(|| MetricBucket {
-                    metric_type: metric_type.to_string(),
-                    date: date.clone(),
-                    series: Value::Object(Map::new()),
-                });
-            let bucket_series = bucket
-                .series
-                .as_object_mut()
-                .expect("bucket series object");
+            let bucket = buckets.entry(date.clone()).or_insert_with(|| MetricBucket {
+                metric_type: metric_type.to_string(),
+                date: date.clone(),
+                series: Value::Object(Map::new()),
+            });
+            let bucket_series = bucket.series.as_object_mut().expect("bucket series object");
             let series_points = bucket_series
                 .entry(series_name.clone())
                 .or_insert_with(|| Value::Array(Vec::new()));
