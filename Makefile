@@ -1,14 +1,17 @@
-.PHONY: lint build install fmt clippy test sync-packaging check-packaging release
+.PHONY: lint build install fmt clippy check-loc test sync-packaging check-packaging release
 
 CARGO ?= cargo
 
-lint: fmt clippy
+lint: fmt clippy check-loc
 
 fmt:
 	$(CARGO) fmt --all -- --check
 
 clippy:
 	$(CARGO) clippy --workspace --all-targets -- -D warnings
+
+check-loc:
+	$(CARGO) run -p release --bin check-loc
 
 build:
 	$(CARGO) build --workspace

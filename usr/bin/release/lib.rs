@@ -1,4 +1,11 @@
-//! Shared release helpers: workspace version and packaging sync.
+//! Shared release helpers: workspace version, packaging sync, and loc limits.
+
+mod loc_limits;
+
+pub use loc_limits::{
+    check_loc_limits, write_baseline as write_loc_baseline, LocFinding, LocFindingKind, LocReport,
+    HARD_LIMIT as HARD_LOC_LIMIT, SOFT_LIMIT as SOFT_LOC_LIMIT,
+};
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -17,3 +17,7 @@ path = "release.rs"
 [[bin]]
 name = "sync-packaging"
 path = "sync_packaging.rs"
+
+[[bin]]
+name = "check-loc"
+path = "check_loc.rs"

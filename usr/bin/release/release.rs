@@ -27,6 +27,11 @@ fn main() {
         ],
     );
     run_cmd(&root_display, "cargo", &["test", "--workspace"]);
+    run_cmd(
+        &root_display,
+        "cargo",
+        &["run", "-p", "release", "--bin", "check-loc"],
+    );
 
     if let Err(mismatches) = release::check_packaging(&root) {
         eprintln!(
