@@ -19,7 +19,9 @@ fn main() -> ExitCode {
                 if recorded.is_empty() {
                     println!(
                         "{}no files exceed the {} line hard limit{}",
-                        GREEN, release::HARD_LOC_LIMIT, NC
+                        GREEN,
+                        release::HARD_LOC_LIMIT,
+                        NC
                     );
                 } else {
                     println!(
@@ -55,20 +57,22 @@ fn main() -> ExitCode {
                 if report.has_errors() {
                     eprintln!(
                         "{}line count check failed (hard limit {} lines, soft warning {} lines):{}",
-                        RED, release::HARD_LOC_LIMIT, release::SOFT_LOC_LIMIT, NC
+                        RED,
+                        release::HARD_LOC_LIMIT,
+                        release::SOFT_LOC_LIMIT,
+                        NC
                     );
                     for error in &report.errors {
-                        eprintln!(
-                            "  {}",
-                            format_loc_finding(error)
-                        );
+                        eprintln!("  {}", format_loc_finding(error));
                         eprintln!("    {}", error.path);
                     }
                     ExitCode::FAILURE
                 } else if report.warnings.is_empty() {
                     println!(
                         "{}all Rust sources are within the {} line soft limit{}",
-                        GREEN, release::SOFT_LOC_LIMIT, NC
+                        GREEN,
+                        release::SOFT_LOC_LIMIT,
+                        NC
                     );
                     ExitCode::SUCCESS
                 } else {
