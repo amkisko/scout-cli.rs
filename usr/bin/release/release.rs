@@ -29,7 +29,10 @@ fn main() {
     run_cmd(&root_display, "cargo", &["test", "--workspace"]);
 
     if let Err(mismatches) = release::check_packaging(&root) {
-        eprintln!("{}packaging is out of sync with workspace version:{}", RED, NC);
+        eprintln!(
+            "{}packaging is out of sync with workspace version:{}",
+            RED, NC
+        );
         for mismatch in mismatches {
             eprintln!("  - {mismatch}");
         }
@@ -75,7 +78,11 @@ fn main() {
         "cargo",
         &["publish", "-p", "scout_lib", "--allow-dirty"],
     );
-    run_cmd(&root_display, "cargo", &["publish", "-p", "scout", "--allow-dirty"]);
+    run_cmd(
+        &root_display,
+        "cargo",
+        &["publish", "-p", "scout", "--allow-dirty"],
+    );
     run_cmd(&root_display, "git", &["tag", &format!("v{version}")]);
     run_cmd(&root_display, "git", &["push", "--tags"]);
     if Command::new("gh").arg("--version").output().is_ok() {

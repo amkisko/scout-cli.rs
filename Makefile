@@ -1,4 +1,4 @@
-.PHONY: lint build install fmt clippy sync-packaging check-packaging
+.PHONY: lint build install fmt clippy sync-packaging check-packaging release
 
 CARGO ?= cargo
 
@@ -21,3 +21,6 @@ sync-packaging:
 
 check-packaging:
 	$(CARGO) run -p release --bin sync-packaging -- --check
+
+release:
+	$(CARGO) run -p release
