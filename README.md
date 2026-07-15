@@ -145,13 +145,14 @@ API key: configure one secret backend (see above). Plain-text keys are not suppo
 - Format: `cargo fmt --all`
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Tests: `cargo test --workspace`
-- Release (from repo root): `cargo run -p release` — runs checks, then publish and GitHub release.
+- Release (from repo root): `cargo run -p release` — runs checks, verifies packaging, then publish and GitHub release.
+- Packaging sync: `make sync-packaging` (or `cargo run -p release --bin sync-packaging`) — align packaging manifests with the workspace version in `Cargo.toml`.
 
 ## Repository layout
 
 - `scout_lib` — ScoutAPM API client library
 - `scout` — CLI binary
-- `usr/bin/release` — Rust release script (format, clippy, test, tag, publish)
+- `usr/bin/release` — release tooling (`sync-packaging`, `release`)
 - `packaging/` — Homebrew, Nix, Flatpak, AUR, FreeBSD (port), Gentoo (ebuild)
 - `.github/workflows` — CI (test, format, clippy)
 

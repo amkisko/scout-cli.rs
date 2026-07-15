@@ -3,7 +3,7 @@
 # Submit to AUR and users install with: yay -S scout-cli
 
 pkgname=scout-cli
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors"
 arch=('x86_64' 'aarch64' 'i686')
