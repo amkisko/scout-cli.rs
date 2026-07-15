@@ -18,6 +18,16 @@ const VALID_METRICS: [&str; 6] = [
     "queue_time",
 ];
 const VALID_INSIGHTS: [&str; 3] = ["n_plus_one", "memory_bloat", "slow_query"];
+const VALID_JOB_METRICS: [&str; 5] = [
+    "throughput",
+    "execution_time",
+    "latency",
+    "errors",
+    "allocations",
+];
+const VALID_ENDPOINT_SORT_BY: [&str; 4] =
+    ["time_consumed", "response_time", "throughput", "error_rate"];
+const VALID_ANOMALY_STATES: [&str; 3] = ["open", "closed", "all"];
 const MAX_RANGE_SECS: i64 = 14 * 24 * 3600; // 14 days
 
 /// ScoutAPM API client.
@@ -147,13 +157,28 @@ impl Client {
     }
 
     /// List endpoints for an app.
+    ///
+    /// Without `sort_by`, `limit`, or `offset`, returns the full listing as an array.
+    /// With any of those parameters, returns the paginated object shape.
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_endpoints(
         &self,
         app_id: u64,
         from: Option<&str>,
         to: Option<&str>,
         range: Option<&str>,
+        sort_by: Option<&str>,
+        limit: Option<u32>,
+        offset: Option<u32>,
     ) -> Result<Value, Error> {
+        if let Some(sort) = sort_by {
+            if !VALID_ENDPOINT_SORT_BY.contains(&sort) {
+                return Err(Error::Other(format!(
+                    "Invalid sort_by. Must be one of: {}",
+                    VALID_ENDPOINT_SORT_BY.join(", ")
+                )));
+            }
+        }
         let (from_str, to_str) = if let Some(r) = range {
             calculate_range(r, to).map_err(Error::Other)?
         } else if from.is_none() && to.is_none() {
@@ -169,13 +194,27 @@ impl Client {
             (from_s, to_s)
         };
         validate_time_range(&from_str, &to_str)?;
-        let url = format!(
+        let mut url = format!(
             "{}/apps/{}/endpoints?from={}&to={}",
             self.api_base,
             app_id,
             urlencoding::encode(&from_str),
             urlencoding::encode(&to_str)
         );
+        let mut params = vec![];
+        if let Some(sort) = sort_by {
+            params.push(format!("sort_by={}", urlencoding::encode(sort)));
+        }
+        if let Some(limit) = limit {
+            params.push(format!("limit={limit}"));
+        }
+        if let Some(offset) = offset {
+            params.push(format!("offset={offset}"));
+        }
+        if !params.is_empty() {
+            url.push('&');
+            url.push_str(&params.join("&"));
+        }
         let res: Value = self.send(self.auth(self.http.get(&url))).await?;
         Ok(res.get("results").cloned().unwrap_or(Value::Null))
     }
@@ -271,6 +310,219 @@ impl Client {
         Ok(res
             .get("results")
             .and_then(|r| r.get("trace"))
+            .cloned()
+            .unwrap_or(Value::Null))
+    }
+
+    /// List background jobs for an application.
+    pub async fn list_jobs(
+        &self,
+        app_id: u64,
+        from: Option<&str>,
+        to: Option<&str>,
+        range: Option<&str>,
+    ) -> Result<Value, Error> {
+        let (from_str, to_str) = if let Some(r) = range {
+            calculate_range(r, to).map_err(Error::Other)?
+        } else if from.is_none() && to.is_none() {
+            calculate_range("7days", None).map_err(Error::Other)?
+        } else {
+            let to_s = to
+                .map(String::from)
+                .unwrap_or_else(|| format_time(Utc::now()));
+            let from_s = from.map(String::from).unwrap_or_else(|| {
+                let (f, _) = calculate_range("7days", Some(&to_s)).unwrap();
+                f
+            });
+            (from_s, to_s)
+        };
+        validate_time_range(&from_str, &to_str)?;
+        let url = format!(
+            "{}/apps/{}/jobs?from={}&to={}",
+            self.api_base,
+            app_id,
+            urlencoding::encode(&from_str),
+            urlencoding::encode(&to_str)
+        );
+        let res: Value = self.send(self.auth(self.http.get(&url))).await?;
+        Ok(res.get("results").cloned().unwrap_or(Value::Null))
+    }
+
+    /// List available metric types for a background job.
+    pub async fn list_job_metrics(&self, app_id: u64, job_id: &str) -> Result<Vec<String>, Error> {
+        let url = format!("{}/apps/{}/jobs/{}/metrics", self.api_base, app_id, job_id);
+        let res: Value = self.send(self.auth(self.http.get(&url))).await?;
+        let arr = res
+            .get("results")
+            .and_then(|r| r.get("availableMetrics"))
+            .and_then(|a| a.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let list: Vec<String> = arr
+            .into_iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+        Ok(list)
+    }
+
+    /// Get metric data for a specific background job.
+    pub async fn get_job_metrics(
+        &self,
+        app_id: u64,
+        job_id: &str,
+        metric_type: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+        range: Option<&str>,
+    ) -> Result<Value, Error> {
+        if !VALID_JOB_METRICS.contains(&metric_type) {
+            return Err(Error::Other(format!(
+                "Invalid metric_type. Must be one of: {}",
+                VALID_JOB_METRICS.join(", ")
+            )));
+        }
+        let (from, to) = if let Some(r) = range {
+            let (f, t) = calculate_range(r, to).map_err(Error::Other)?;
+            (Some(f), Some(t))
+        } else {
+            (from.map(String::from), to.map(String::from))
+        };
+        if let (Some(ref f), Some(ref t)) = (&from, &to) {
+            validate_time_range(f, t)?;
+        }
+        let mut url = format!(
+            "{}/apps/{}/jobs/{}/metrics/{}",
+            self.api_base, app_id, job_id, metric_type
+        );
+        if from.is_some() || to.is_some() {
+            let mut params = vec![];
+            if let Some(ref f) = from {
+                params.push(format!("from={}", urlencoding::encode(f)));
+            }
+            if let Some(ref t) = to {
+                params.push(format!("to={}", urlencoding::encode(t)));
+            }
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        let res: Value = self.send(self.auth(self.http.get(&url))).await?;
+        Ok(res
+            .get("results")
+            .and_then(|r| r.get("series"))
+            .cloned()
+            .unwrap_or(Value::Null))
+    }
+
+    /// List traces for a background job (max 100, within 7 days).
+    pub async fn list_job_traces(
+        &self,
+        app_id: u64,
+        job_id: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+        range: Option<&str>,
+    ) -> Result<Value, Error> {
+        let (from_str, to_str) = if let Some(r) = range {
+            calculate_range(r, to).map_err(Error::Other)?
+        } else if from.is_none() && to.is_none() {
+            calculate_range("7days", None).map_err(Error::Other)?
+        } else {
+            let to_s = to
+                .map(String::from)
+                .unwrap_or_else(|| format_time(Utc::now()));
+            let from_s = from.map(String::from).unwrap_or_else(|| {
+                let (f, _) = calculate_range("7days", Some(&to_s)).unwrap();
+                f
+            });
+            (from_s, to_s)
+        };
+        validate_time_range(&from_str, &to_str)?;
+        let url = format!(
+            "{}/apps/{}/jobs/{}/traces?from={}&to={}",
+            self.api_base,
+            app_id,
+            job_id,
+            urlencoding::encode(&from_str),
+            urlencoding::encode(&to_str)
+        );
+        let res: Value = self.send(self.auth(self.http.get(&url))).await?;
+        Ok(res.get("results").cloned().unwrap_or(Value::Null))
+    }
+
+    /// List anomaly events for an app (max 100, within 30 days).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn list_anomaly_events(
+        &self,
+        app_id: u64,
+        from: Option<&str>,
+        to: Option<&str>,
+        range: Option<&str>,
+        state: Option<&str>,
+        metric: Option<&str>,
+        endpoint: Option<&str>,
+    ) -> Result<Vec<Value>, Error> {
+        if let Some(state) = state {
+            if !VALID_ANOMALY_STATES.contains(&state) {
+                return Err(Error::Other(format!(
+                    "Invalid state. Must be one of: {}",
+                    VALID_ANOMALY_STATES.join(", ")
+                )));
+            }
+        }
+        let (from_str, to_str) = if let Some(r) = range {
+            let (f, t) = calculate_range(r, to).map_err(Error::Other)?;
+            (Some(f), Some(t))
+        } else {
+            (from.map(String::from), to.map(String::from))
+        };
+        if let (Some(ref f), Some(ref t)) = (&from_str, &to_str) {
+            validate_time_range(f, t)?;
+        }
+        let mut url = format!("{}/apps/{}/anomaly_events", self.api_base, app_id);
+        let mut params = vec![];
+        if let Some(ref f) = from_str {
+            params.push(format!("from={}", urlencoding::encode(f)));
+        }
+        if let Some(ref t) = to_str {
+            params.push(format!("to={}", urlencoding::encode(t)));
+        }
+        if let Some(state) = state {
+            params.push(format!("state={}", urlencoding::encode(state)));
+        }
+        if let Some(metric) = metric {
+            params.push(format!("metric={}", urlencoding::encode(metric)));
+        }
+        if let Some(endpoint) = endpoint {
+            params.push(format!("endpoint={}", urlencoding::encode(endpoint)));
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        let res: Value = self.send(self.auth(self.http.get(&url))).await?;
+        let list = res
+            .get("results")
+            .and_then(|r| r.get("anomaly_events"))
+            .and_then(|a| a.as_array())
+            .cloned()
+            .unwrap_or_default();
+        Ok(list)
+    }
+
+    /// Get a single anomaly event by ID.
+    pub async fn get_anomaly_event(
+        &self,
+        app_id: u64,
+        anomaly_event_id: u64,
+    ) -> Result<Value, Error> {
+        let url = format!(
+            "{}/apps/{}/anomaly_events/{}",
+            self.api_base, app_id, anomaly_event_id
+        );
+        let res: Value = self.send(self.auth(self.http.get(&url))).await?;
+        Ok(res
+            .get("results")
+            .and_then(|r| r.get("anomaly_event"))
             .cloned()
             .unwrap_or(Value::Null))
     }
@@ -607,5 +859,93 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, Error::Other(_)));
         assert!(err.to_string().contains("Invalid insight_type"));
+    }
+
+    #[tokio::test]
+    async fn get_job_metrics_invalid_type() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_job_metrics(1, "test_job", "invalid_metric", None, None, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("Invalid metric_type"));
+    }
+
+    #[tokio::test]
+    async fn get_job_metrics_from_after_to() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_job_metrics(
+                1,
+                "test_job",
+                "execution_time",
+                Some("2025-01-02T00:00:00Z"),
+                Some("2025-01-01T00:00:00Z"),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("from_time must be before to_time"));
+    }
+
+    #[tokio::test]
+    async fn get_job_metrics_range_exceeds_2_weeks() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .get_job_metrics(
+                1,
+                "test_job",
+                "execution_time",
+                Some("2025-01-01T00:00:00Z"),
+                Some("2025-01-20T00:00:00Z"),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("2 weeks"));
+    }
+
+    #[tokio::test]
+    async fn list_endpoints_invalid_sort_by() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .list_endpoints(1, None, None, None, Some("invalid"), None, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("Invalid sort_by"));
+    }
+
+    #[tokio::test]
+    async fn list_anomaly_events_invalid_state() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .list_anomaly_events(1, None, None, None, Some("invalid"), None, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("Invalid state"));
+    }
+
+    #[tokio::test]
+    async fn list_anomaly_events_from_after_to() {
+        let c = Client::new("key".to_string());
+        let err = c
+            .list_anomaly_events(
+                1,
+                Some("2025-01-02T00:00:00Z"),
+                Some("2025-01-01T00:00:00Z"),
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::Other(_)));
+        assert!(err.to_string().contains("from_time must be before to_time"));
     }
 }

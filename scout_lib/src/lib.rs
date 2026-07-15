@@ -1,7 +1,7 @@
 //! ScoutAPM API client library.
 //!
 //! Provides a typed client for the ScoutAPM REST API: apps, metrics, endpoints,
-//! traces, errors, and insights.
+//! jobs, traces, errors, insights, and anomaly events.
 
 pub mod client;
 pub mod error;

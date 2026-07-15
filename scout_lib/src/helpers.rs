@@ -49,6 +49,8 @@ pub enum ScoutUrlType {
     App,
     Endpoint,
     Trace,
+    Job,
+    JobTrace,
     ErrorGroup,
     Insight,
     Unknown,
@@ -60,10 +62,12 @@ pub struct ParsedScoutUrl {
     pub url_type: ScoutUrlType,
     pub app_id: Option<u64>,
     pub endpoint_id: Option<String>,
+    pub job_id: Option<String>,
     pub trace_id: Option<u64>,
     pub error_id: Option<u64>,
     pub insight_type: Option<String>,
     pub decoded_endpoint: Option<String>,
+    pub decoded_job: Option<String>,
 }
 
 /// Parse a ScoutAPM URL and extract resource identifiers.
@@ -75,8 +79,12 @@ pub fn parse_scout_url(url: &str) -> Result<ParsedScoutUrl, String> {
     let app_index = segments.iter().position(|s| *s == "apps");
     let app_id = app_index.and_then(|i| segments.get(i + 1).and_then(|s| s.parse::<u64>().ok()));
 
-    let url_type = if segments.contains(&"trace") {
+    let url_type = if segments.contains(&"trace") && segments.contains(&"endpoints") {
         ScoutUrlType::Trace
+    } else if segments.contains(&"trace") && segments.contains(&"jobs") {
+        ScoutUrlType::JobTrace
+    } else if segments.contains(&"jobs") {
+        ScoutUrlType::Job
     } else if segments.contains(&"endpoints") {
         ScoutUrlType::Endpoint
     } else if segments.contains(&"error_groups") {
@@ -92,6 +100,10 @@ pub fn parse_scout_url(url: &str) -> Result<ParsedScoutUrl, String> {
     let endpoint_id = segments
         .iter()
         .position(|s| *s == "endpoints")
+        .and_then(|i| segments.get(i + 1).map(|s| (*s).to_string()));
+    let job_id = segments
+        .iter()
+        .position(|s| *s == "jobs")
         .and_then(|i| segments.get(i + 1).map(|s| (*s).to_string()));
     let trace_id = segments
         .iter()
@@ -109,15 +121,18 @@ pub fn parse_scout_url(url: &str) -> Result<ParsedScoutUrl, String> {
     let decoded_endpoint = endpoint_id
         .as_ref()
         .and_then(|id| decode_endpoint_id(id).ok());
+    let decoded_job = job_id.as_ref().and_then(|id| decode_endpoint_id(id).ok());
 
     Ok(ParsedScoutUrl {
         url_type,
         app_id,
         endpoint_id,
+        job_id,
         trace_id,
         error_id,
         insight_type,
         decoded_endpoint,
+        decoded_job,
     })
 }
 
@@ -258,6 +273,28 @@ mod tests {
         assert_eq!(p.url_type, ScoutUrlType::Insight);
         assert_eq!(p.app_id, Some(5));
         assert_eq!(p.insight_type.as_deref(), Some("n_plus_one"));
+    }
+
+    #[test]
+    fn test_parse_scout_url_job() {
+        let p = parse_scout_url("https://scoutapm.com/apps/1/jobs/ZGVmYXVsdC9EdW1teVdvcmtlcg==")
+            .unwrap();
+        assert_eq!(p.url_type, ScoutUrlType::Job);
+        assert_eq!(p.app_id, Some(1));
+        assert_eq!(p.job_id.as_deref(), Some("ZGVmYXVsdC9EdW1teVdvcmtlcg=="));
+        assert_eq!(p.decoded_job.as_deref(), Some("default/DummyWorker"));
+    }
+
+    #[test]
+    fn test_parse_scout_url_job_trace() {
+        let p = parse_scout_url(
+            "https://scoutapm.com/apps/1/jobs/ZGVmYXVsdC9EdW1teVdvcmtlcg==/trace/456",
+        )
+        .unwrap();
+        assert_eq!(p.url_type, ScoutUrlType::JobTrace);
+        assert_eq!(p.app_id, Some(1));
+        assert_eq!(p.job_id.as_deref(), Some("ZGVmYXVsdC9EdW1teVdvcmtlcg=="));
+        assert_eq!(p.trace_id, Some(456));
     }
 
     #[test]

@@ -1,5 +1,11 @@
 //! Interactive TUI: app-scoped view with breadcrumbs and tabs (Endpoints, Insights, Metrics, Errors).
 
+use crossterm::{
+    cursor::{Hide, Show},
+    event::{self, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use ratatui::{
     layout::Alignment,
     layout::{Constraint, Direction, Layout},
@@ -13,14 +19,10 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::time::Instant;
-use tokio::task::JoinHandle;
 use tokio::runtime::Runtime;
-use crossterm::{
-    cursor::{Hide, Show},
-    event::{self, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use tokio::task::JoinHandle;
+
+type PendingMetricLoad = (u64, String, JoinHandle<Result<Value, String>>);
 
 /// TUI options (from --app, --tab, --refresh, --utc).
 #[derive(Clone)]
@@ -151,7 +153,7 @@ async fn fetch_endpoints(client: &Client, app_id: u64) -> Result<Value, String> 
     let client = client.clone();
     run_async(async move {
         client
-            .list_endpoints(app_id, None, None, Some("7days"))
+            .list_endpoints(app_id, None, None, Some("7days"), None, None, None)
             .await
             .map_err(|e| e.to_string())
     })
@@ -462,7 +464,7 @@ fn endpoints_as_list(v: &Value) -> Vec<(String, Value)> {
             (name, o)
         })
         .collect();
-    out.sort_by(|a, b| time_sort_key(&b.1).cmp(&time_sort_key(&a.1)));
+    out.sort_by_key(|b| std::cmp::Reverse(time_sort_key(&b.1)));
     out
 }
 
@@ -497,7 +499,7 @@ fn insights_as_list(v: &Value) -> Vec<(String, Value)> {
             }
         }
     }
-    out.sort_by(|a, b| time_sort_key(&b.1).cmp(&time_sort_key(&a.1)));
+    out.sort_by_key(|b| std::cmp::Reverse(time_sort_key(&b.1)));
     out
 }
 
@@ -508,8 +510,8 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
     enable_raw_mode().map_err(|e| e.to_string())?;
     execute!(io::stdout(), EnterAlternateScreen, Hide).map_err(|e| e.to_string())?;
     let _guard = TerminalGuard;
-    let mut terminal =
-        Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout())).map_err(|e| e.to_string())?;
+    let mut terminal = Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout()))
+        .map_err(|e| e.to_string())?;
 
     // If no --app, we need to show app picker first. Otherwise resolve app and go to app view.
     let mut current_app: Option<(u64, String)> = opts
@@ -537,7 +539,7 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
     let mut tab_errors: HashMap<(u64, Tab), String> = HashMap::new();
     let mut pending_tab_loads: HashMap<(u64, Tab), JoinHandle<Result<TabPayload, String>>> =
         HashMap::new();
-    let mut pending_metric_load: Option<(u64, String, JoinHandle<Result<Value, String>>)> = None;
+    let mut pending_metric_load: Option<PendingMetricLoad> = None;
     let refresh_secs = opts.refresh_secs;
     let mut last_refresh = Instant::now();
     let spinner_started = Instant::now();
@@ -562,8 +564,7 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
             if let Some(handle) = pending_tab_loads.remove(&key) {
                 match handle.await {
                     Ok(Ok(payload)) => {
-                        let is_current_app =
-                            current_app.as_ref().map(|(id, _)| *id) == Some(key.0);
+                        let is_current_app = current_app.as_ref().map(|(id, _)| *id) == Some(key.0);
                         if is_current_app {
                             apply_tab_payload(&mut tab_data, key.1, payload);
                             loaded_tabs.insert(key);
@@ -634,7 +635,9 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
             {
                 Some(format!("Loading {}…", tab.as_str().to_lowercase()))
             } else if tab_data.list_len(tab) == 0 && drill.is_none() {
-                tab_errors.get(&(app_id, tab)).map(|e| format!("Error: {}", e))
+                tab_errors
+                    .get(&(app_id, tab))
+                    .map(|e| format!("Error: {}", e))
             } else {
                 None
             }
@@ -867,12 +870,12 @@ pub async fn run(client: &Client, opts: Options) -> Result<(), String> {
                             app_search_last_typed = Some(Instant::now());
                         }
                     }
-                    KeyCode::Char(c) => {
+                    KeyCode::Char(c)
                         // Only add to search when on app list; leave q/h/j/k/l for quit and navigation
-                        if current_app.is_none() && !['q', 'h', 'j', 'k', 'l'].contains(&c) {
-                            app_search_pending.push(c);
-                            app_search_last_typed = Some(Instant::now());
-                        }
+                        if current_app.is_none() && !['q', 'h', 'j', 'k', 'l'].contains(&c) =>
+                    {
+                        app_search_pending.push(c);
+                        app_search_last_typed = Some(Instant::now());
                     }
                     _ => {}
                 }
@@ -938,7 +941,9 @@ async fn fetch_tab_payload(client: &Client, app_id: u64, tab: Tab) -> Result<Tab
             let v = fetch_insights(client, app_id).await?;
             Ok(TabPayload::Insights(insights_as_list(&v)))
         }
-        Tab::Metrics => Ok(TabPayload::Metrics(fetch_metrics_list(client, app_id).await?)),
+        Tab::Metrics => Ok(TabPayload::Metrics(
+            fetch_metrics_list(client, app_id).await?,
+        )),
         Tab::Errors => {
             let mut errs = fetch_errors(client, app_id).await?;
             errs.sort_by_key(|b| std::cmp::Reverse(time_sort_key(b))); // desc (latest first)
@@ -1016,8 +1021,7 @@ fn build_ui_state<'a>(
         let indices = filtered_app_indices(app_list, app_search);
         let items: Vec<ListItem> = indices
             .iter()
-            .enumerate()
-            .map(|(_, &idx)| {
+            .map(|&idx| {
                 let app = &app_list[idx];
                 let name = app.get("name").and_then(|v| v.as_str()).unwrap_or("?");
                 let id = app.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -1043,26 +1047,22 @@ fn build_ui_state<'a>(
             Tab::Endpoints => tab_data
                 .endpoints
                 .iter()
-                .enumerate()
-                .map(|(_, (name, _))| ListItem::new(Line::from(name.clone())))
+                .map(|(name, _)| ListItem::new(Line::from(name.clone())))
                 .collect(),
             Tab::Insights => tab_data
                 .insights
                 .iter()
-                .enumerate()
-                .map(|(_, (name, _))| ListItem::new(Line::from(name.clone())))
+                .map(|(name, _)| ListItem::new(Line::from(name.clone())))
                 .collect(),
             Tab::Metrics => tab_data
                 .metrics
                 .iter()
-                .enumerate()
-                .map(|(_, name)| ListItem::new(Line::from(name.clone())))
+                .map(|name| ListItem::new(Line::from(name.clone())))
                 .collect(),
             Tab::Errors => tab_data
                 .errors
                 .iter()
-                .enumerate()
-                .map(|(_, v)| {
+                .map(|v| {
                     let name = v
                         .get("message")
                         .or_else(|| v.get("name"))
@@ -1142,15 +1142,19 @@ fn draw_ui(
             .iter()
             .position(|&name| name == current_tab.as_str())
             .unwrap_or(0);
-        let tabs = Tabs::new(tab_names.iter().map(|name| Line::from(format!(" {} ", name))))
-            .select(tab_index)
-            .style(Style::default().fg(Color::Cyan))
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            );
+        let tabs = Tabs::new(
+            tab_names
+                .iter()
+                .map(|name| Line::from(format!(" {} ", name))),
+        )
+        .select(tab_index)
+        .style(Style::default().fg(Color::Cyan))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
         f.render_widget(tabs, vertical[1]);
     }
     let is_loading = content_title.trim() == "Loading";
