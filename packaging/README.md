@@ -4,7 +4,7 @@ Distribution artifacts and package descriptors for ScoutAPM CLI.
 
 | Distribution | Path | Notes |
 |-------------|------|--------|
-| **Homebrew** | [homebrew/scout-cli.rb](homebrew/scout-cli.rb) | Update `url` and `sha256` for each release. Install: `brew install amkisko/tap/scout-cli` |
+| **Homebrew** | [homebrew/scout-cli.rb](homebrew/scout-cli.rb) | `make sync-packaging` updates the tag URL; fill `sha256` after the release tarball exists |
 | **Nix** | [nix/](nix/) + repo root [../flake.nix](../flake.nix) | `nix build .#default` from repo root |
 | **Flatpak** | [flatpak/io.github.amkisko.scout-cli.yml](flatpak/io.github.amkisko.scout-cli.yml) | May require Rust SDK; adjust base/SDK as needed |
 | **Arch AUR** | [aur/PKGBUILD](aur/PKGBUILD) | Run `updpkgsums` after setting `pkgver`; submit to AUR |

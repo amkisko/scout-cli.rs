@@ -3,10 +3,16 @@ name = "release"
 version = "0.2.0"
 edition = "2021"
 publish = false
-description = "Release script for scout-cli (format, clippy, test, tag, publish)"
+description = "Release tooling for scout-cli (packaging sync, format, clippy, test, tag, publish)"
+
+[lib]
+name = "release"
+path = "lib.rs"
 
 [[bin]]
 name = "release"
 path = "release.rs"
 
-[dependencies]
+[[bin]]
+name = "sync-packaging"
+path = "sync_packaging.rs"

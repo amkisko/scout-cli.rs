@@ -13,7 +13,7 @@ Use the generated ebuild (it will include all `CARGO_CRATE_URIS`). Copy it into 
 
 **Option B – Template ebuild:**
 
-The provided `app-misc/scout-cli/scout-cli-0.1.0.ebuild` is a minimal template. Copy it to a local overlay. It may require network access during build to fetch crates. For a fully offline, reproducible build use Option A.
+The provided `app-misc/scout-cli/scout-cli-0.2.0.ebuild` is a minimal template. Copy it to a local overlay. It may require network access during build to fetch crates. For a fully offline, reproducible build use Option A.
 
 **Install from source (no overlay):**
 
