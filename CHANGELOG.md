@@ -6,6 +6,8 @@
 - Add anomaly event commands: `anomaly-events`, `anomaly-event` (filter by state, metric, or endpoint).
 - Add endpoint listing options `--sort-by`, `--limit`, and `--offset` for sorted, paginated results.
 - Extend `parse-url` to recognize job and job trace ScoutAPM URLs.
+- Load secret-backend settings from `SCOUT_HOME` (default `~/.scout/config.env`).
+- Add `scout config` to list, get, set, and unset home config values.
 
 ## 0.1.0 (2025-02-10)
 

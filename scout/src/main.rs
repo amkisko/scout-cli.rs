@@ -1,5 +1,6 @@
 //! ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors from the terminal.
 
+mod config_cmd;
 mod output;
 mod tui;
 
@@ -235,8 +236,27 @@ enum Commands {
     },
     /// Parse a ScoutAPM URL and print extracted IDs
     ParseUrl { url: String },
+    /// Manage home config (`~/.scout/config.env`)
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
     /// Show version
     Version,
+}
+
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// List config keys and effective values
+    List,
+    /// Print one config value
+    Get { key: String },
+    /// Set a config value in `config.env`
+    Set { key: String, value: String },
+    /// Remove a config value from `config.env`
+    Unset { key: String },
+    /// Print config directory and file paths
+    Path,
 }
 
 #[tokio::main]
@@ -246,6 +266,24 @@ async fn main() -> ExitCode {
     if matches!(cli.command, Some(Commands::Version)) {
         println!("scout {}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
+    }
+
+    if let Some(Commands::Config { command }) = cli.command {
+        let json = matches!(cli.output, OutputFormatArg::Json);
+        let result = match command {
+            ConfigCommands::List => config_cmd::run_list(json),
+            ConfigCommands::Get { key } => config_cmd::run_get(&key, json),
+            ConfigCommands::Set { key, value } => config_cmd::run_set(&key, &value, json),
+            ConfigCommands::Unset { key } => config_cmd::run_unset(&key),
+            ConfigCommands::Path => config_cmd::run_path(),
+        };
+        return match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("Error: {error}");
+                ExitCode::FAILURE
+            }
+        };
     }
 
     let (api_key, _source) = match get_api_key() {
@@ -595,7 +633,7 @@ async fn run(client: &Client, cmd: Commands, format: output::OutputFormat) -> Re
             let parsed = parse_scout_url(&url).map_err(|e| e.to_string())?;
             print_value(&serde_json::to_value(&parsed).unwrap());
         }
-        Commands::Version => {}
+        Commands::Config { .. } | Commands::Version => {}
     }
     Ok(())
 }
