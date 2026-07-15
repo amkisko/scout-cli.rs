@@ -4,6 +4,7 @@ version = "0.2.0"
 edition = "2021"
 publish = false
 description = "Release tooling for scout-cli (packaging sync, format, clippy, test, tag, publish)"
+default-run = "release"
 
 [lib]
 name = "release"

@@ -46,10 +46,7 @@ fn main() -> ExitCode {
                         GREEN, version, NC
                     );
                 } else {
-                    println!(
-                        "{}Synced packaging to version {}{}",
-                        GREEN, version, NC
-                    );
+                    println!("{}Synced packaging to version {}{}", GREEN, version, NC);
                     for path in updated {
                         println!("  updated {path}");
                     }

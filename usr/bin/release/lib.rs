@@ -160,9 +160,8 @@ fn replace_in_file(
     transform: impl FnOnce(&str) -> String,
 ) -> Result<(), String> {
     let path = root.join(relative_path);
-    let content = fs::read_to_string(&path).map_err(|error| {
-        format!("read {}: {error}", path.display())
-    })?;
+    let content =
+        fs::read_to_string(&path).map_err(|error| format!("read {}: {error}", path.display()))?;
     let next = transform(&content);
     if next == content {
         if !content.contains(expected_snippet) {
@@ -270,16 +269,19 @@ fn replace_prefixed_line(content: &str, prefix: &str, replacement: &str) -> Stri
         + if content.ends_with('\n') { "\n" } else { "" }
 }
 
-fn rename_gentoo_ebuild(root: &Path, version: &str, updated: &mut Vec<String>) -> Result<(), String> {
+fn rename_gentoo_ebuild(
+    root: &Path,
+    version: &str,
+    updated: &mut Vec<String>,
+) -> Result<(), String> {
     let directory = root.join("packaging/gentoo/app-misc/scout-cli");
     let target = directory.join(format!("scout-cli-{version}.ebuild"));
     if target.is_file() {
         return Ok(());
     }
 
-    let entries = fs::read_dir(&directory).map_err(|error| {
-        format!("read {}: {error}", directory.display())
-    })?;
+    let entries = fs::read_dir(&directory)
+        .map_err(|error| format!("read {}: {error}", directory.display()))?;
     let mut source = None;
     for entry in entries {
         let entry = entry.map_err(|error| format!("read gentoo ebuild dir: {error}"))?;
@@ -291,12 +293,8 @@ fn rename_gentoo_ebuild(root: &Path, version: &str, updated: &mut Vec<String>) -
         }
     }
 
-    let source = source.ok_or_else(|| {
-        format!(
-            "no scout-cli ebuild found in {}",
-            directory.display()
-        )
-    })?;
+    let source =
+        source.ok_or_else(|| format!("no scout-cli ebuild found in {}", directory.display()))?;
     if source == target {
         return Ok(());
     }
@@ -323,7 +321,8 @@ mod tests {
 
     #[test]
     fn set_homebrew_url_replaces_tagged_archive_url() {
-        let input = "  url \"https://github.com/amkisko/scout-cli.rs/archive/refs/tags/v0.1.0.tar.gz\"\n";
+        let input =
+            "  url \"https://github.com/amkisko/scout-cli.rs/archive/refs/tags/v0.1.0.tar.gz\"\n";
         let expected =
             "  url \"https://github.com/amkisko/scout-cli.rs/archive/refs/tags/v0.2.0.tar.gz\"";
         assert_eq!(set_homebrew_url(input, "0.2.0"), format!("{expected}\n"));
