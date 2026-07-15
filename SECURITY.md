@@ -33,6 +33,8 @@ Alternatively, report confidentially via **GitHub**: use the repository's *Secur
 
 **Plain-text API keys are not supported.** The CLI does not accept the API key via environment variables (`API_KEY`, `SCOUT_APM_API_KEY`) or `--api-key`. You must use a secret backend (1Password, Bitwarden, or KeePassXC) so the key is never on the command line, in shell history, or in process lists.
 
+Home config (`~/.scout/config.env`, or `SCOUT_HOME`) may store secret-backend *pointers* (vault paths, item IDs). It must not store the API key itself.
+
 ## Supported versions
 
 We release patches for the latest minor version. Security updates are prioritized for the current stable release.

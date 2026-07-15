@@ -15,11 +15,14 @@ pub enum ApiKeySource {
 /// Get API key from a secret backend only (1Password, Bitwarden, KeePassXC).
 ///
 /// Plain-text API keys (env vars or CLI) are not supported for security reasons.
-/// Configure one backend via its env vars (see [secret] module):
+/// Home config is loaded from `$SCOUT_HOME` (default `~/.scout`) before lookup.
+/// Configure one backend via its env vars (see [secret] module) or in
+/// `$SCOUT_HOME/config.env`:
 /// - 1Password: `SCOUT_OP_ENTRY_PATH` (op://Vault/Item) or `SCOUT_OP_VAULT` + `SCOUT_OP_ITEM`; optional `SCOUT_OP_FIELD` (default API_KEY).
 /// - Bitwarden: `SCOUT_BW_ITEM_ID` (login item UUID); optional `SCOUT_BW_SESSION`.
 /// - KeePassXC: `SCOUT_KPXC_DB`, `SCOUT_KPXC_ENTRY`; optional `SCOUT_KPXC_ATTRIBUTE` (default Password).
 pub fn get_api_key() -> Result<(String, ApiKeySource), String> {
+    crate::config::ensure_home_config_loaded();
     if let Some(k) = crate::secret::one_password() {
         if !k.is_empty() {
             return Ok((k, ApiKeySource::OnePassword));
@@ -35,11 +38,14 @@ pub fn get_api_key() -> Result<(String, ApiKeySource), String> {
             return Ok((k, ApiKeySource::Keepassxc));
         }
     }
-    Err(
-        "API key not found. Configure a secret backend: SCOUT_OP_ENTRY_PATH (1Password), \
-         SCOUT_BW_ITEM_ID (Bitwarden), or SCOUT_KPXC_DB+SCOUT_KPXC_ENTRY (KeePassXC). Plain-text keys are not supported."
-            .to_string(),
-    )
+    let home_hint = crate::config::scout_home()
+        .map(|path| format!("{}/config.env", path.display()))
+        .unwrap_or_else(|| "~/.scout/config.env".to_string());
+    Err(format!(
+        "API key not found. Configure a secret backend in {home_hint} or via env vars: \
+         SCOUT_OP_ENTRY_PATH (1Password), SCOUT_BW_ITEM_ID (Bitwarden), or \
+         SCOUT_KPXC_DB+SCOUT_KPXC_ENTRY (KeePassXC). Plain-text keys are not supported."
+    ))
 }
 
 /// Parsed ScoutAPM URL resource type.

@@ -11,13 +11,49 @@ ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors from the ter
 ## Quick start
 
 1. Create an API key in ScoutAPM: [Organization settings](https://scoutapm.com/settings).
-2. Store the key in a **secret backend** (1Password, Bitwarden, or KeePassXC) and configure the CLI via the backend's env vars—see below.
+2. Store the key in a **secret backend** (1Password, Bitwarden, or KeePassXC) and configure the CLI via `~/.scout/config.env` or env vars—see below.
+
+### Home config (`SCOUT_HOME`)
+
+By default the CLI reads backend settings from `~/.scout/config.env` and optional `~/.scout/config.local.env`. Set `SCOUT_HOME` to use another directory. Copy [config.env.example](config.env.example) as a starting point:
+
+```bash
+mkdir -p ~/.scout
+cp config.env.example ~/.scout/config.env
+# edit ~/.scout/config.env
+```
+
+Process environment variables override file values. `config.local.env` overrides `config.env` for keys not already set in the shell.
+
+```bash
+scout config path
+scout config list
+scout config get op.entry_path
+scout config set op.entry_path 'op://Vault/Scout APM'
+scout config unset op.entry_path
+```
+
+Use `--output json` with `list` or `get` for machine-readable output. Friendly keys:
+
+| Key | Env var |
+|-----|---------|
+| `op.entry_path` | `SCOUT_OP_ENTRY_PATH` |
+| `op.vault` | `SCOUT_OP_VAULT` |
+| `op.item` | `SCOUT_OP_ITEM` |
+| `op.field` | `SCOUT_OP_FIELD` |
+| `bw.item_id` | `SCOUT_BW_ITEM_ID` |
+| `bw.session` | `SCOUT_BW_SESSION` |
+| `kpxc.db` | `SCOUT_KPXC_DB` |
+| `kpxc.entry` | `SCOUT_KPXC_ENTRY` |
+| `kpxc.attribute` | `SCOUT_KPXC_ATTRIBUTE` |
+
+`scout config set` writes to `config.env` only. Plain-text API keys are rejected.
 
 ### API key (secret backends only)
 
 **Plain-text API keys are not supported.** The CLI does not accept `--api-key` or `API_KEY` / `SCOUT_APM_API_KEY` environment variables. You must use one of the supported secret backends so the key is never on the command line or in shell history.
 
-Resolution order: **1Password** → **Bitwarden** → **KeePassXC**. Each backend is only tried when its environment variables are set.
+Resolution order: **1Password** → **Bitwarden** → **KeePassXC**. Each backend is only tried when its settings are set (in the environment or home config).
 
 | Backend     | Env vars | Notes |
 |------------|----------|--------|
@@ -138,7 +174,7 @@ scout parse-url "https://scoutapm.com/apps/123/endpoints/.../trace/456"
 scout version
 ```
 
-API key: configure one secret backend (see above). Plain-text keys are not supported.
+API key: configure one secret backend in `~/.scout/config.env` or via env vars (see above). Plain-text keys are not supported.
 
 ## Development
 
