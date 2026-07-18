@@ -287,6 +287,15 @@ For questions or coordination, see [CONTRIBUTING.md](CONTRIBUTING.md) or open a 
 
 If you discover a security vulnerability, please report it responsibly. **Do not** open a public issue. See [SECURITY.md](SECURITY.md) for how to report.
 
+## Links
+
+- [GitHub](https://github.com/amkisko/scout-cli.rs)
+- [GitLab](https://gitlab.com/amkisko/scout-cli.rs)
+- [SonarCloud](https://sonarcloud.io/project/overview?id=amkisko_scout-cli.rs)
+- [Snyk](https://snyk.io/test/github/amkisko/scout-cli.rs)
+- [Codecov](https://app.codecov.io/github/amkisko/scout-cli.rs)
+- [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/amkisko/scout-cli.rs)
+
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).
@@ -294,3 +303,7 @@ MIT. See [LICENSE.md](LICENSE.md).
 ## Sponsors
 
 Sponsored by [Kisko Labs](https://www.kiskolabs.com).
+
+<a href="https://www.kiskolabs.com">
+  <img src="kisko.svg" width="200" alt="Sponsored by Kisko Labs" />
+</a>
