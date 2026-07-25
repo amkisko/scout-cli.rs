@@ -18,8 +18,12 @@ path = "src/lib.rs"
 name = "scout"
 path = "src/main.rs"
 
+[features]
+default = []
+export-parquet = ["scout_lib/export-parquet"]
+
 [dependencies]
-scout_lib = { path = "../scout_lib" }
+scout_lib = { path = "../scout_lib", default-features = false }
 clap = { version = "4.5.58", features = ["derive", "env"] }
 clap_complete = "4.5.58"
 clap_mangen = "0.3.0"

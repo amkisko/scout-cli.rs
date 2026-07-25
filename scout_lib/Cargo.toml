@@ -12,7 +12,7 @@ categories.workspace = true
 description = "ScoutAPM API client library"
 
 [features]
-default = ["export-parquet"]
+default = []
 export-parquet = ["dep:parquet", "dep:arrow-array", "dep:arrow-schema"]
 
 [dependencies]

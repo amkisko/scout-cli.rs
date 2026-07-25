@@ -244,7 +244,7 @@ fn render_parquet(request: &ExportRequest, payload: &ExportPayload) -> Result<Ve
     #[cfg(not(feature = "export-parquet"))]
     {
         let _ = (request, payload);
-        Err("parquet export is disabled in this build. Rebuild with --features export-parquet, or use ndjson/csv".to_string())
+        Err("parquet export is disabled in this build. Rebuild with --features export-parquet (cargo install --path scout --features export-parquet), or use ndjson/csv".to_string())
     }
 }
 

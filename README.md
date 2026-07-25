@@ -81,6 +81,8 @@ Install the CLI for your chosen backend (`op`, `bw`, or `keepassxc-cli`) and ens
 cargo install --path scout
 # or from git
 cargo install --git https://github.com/amkisko/scout-cli.rs --package scout
+# optional: include parquet archive export (larger binary)
+cargo install --path scout --features export-parquet
 ```
 
 **Homebrew** (macOS/Linux)
@@ -220,8 +222,9 @@ scout archive pull 123 --trace-id 456 --trace-id 789
 # Export archived data for other systems
 scout archive export 123 --resource metrics --metric response_time --date 2025-01-01 --format prometheus
 scout archive export 123 --resource endpoints --from 2025-01-01T00:00:00Z --to 2025-01-02T00:00:00Z --format csv --output endpoints.csv
-scout archive export 123 --resource metrics --metric response_time --date 2025-01-01 --format parquet --output metrics.parquet
 scout archive export 123 --resource errors --from ... --to ... --format ndjson --output errors.ndjson
+# parquet requires a build with --features export-parquet
+scout archive export 123 --resource metrics --metric response_time --date 2025-01-01 --format parquet --output metrics.parquet
 
 # Batch multiple scout operations (stdout is always a JSON report)
 echo '[{"args":["archive","path"]},{"args":["config","path"]}]' | scout batch
