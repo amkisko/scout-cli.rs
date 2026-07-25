@@ -7,20 +7,22 @@ fn scout() -> Command {
 
 #[test]
 fn version_flag_prints_version() {
+    let expected = format!("scout {}", env!("CARGO_PKG_VERSION"));
     scout()
         .arg("--version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("scout 0.3.0"));
+        .stdout(predicate::str::contains(expected));
 }
 
 #[test]
 fn version_subcommand_prints_version() {
+    let expected = format!("scout {}", env!("CARGO_PKG_VERSION"));
     scout()
         .arg("version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("scout 0.3.0"));
+        .stdout(predicate::str::contains(expected));
 }
 
 #[test]
