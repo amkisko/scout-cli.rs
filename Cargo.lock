@@ -1644,7 +1644,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "release"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "reqwest"
@@ -1844,7 +1844,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scout"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "scout_lib"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",

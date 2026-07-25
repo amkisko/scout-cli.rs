@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 (2026-07-25)
+
 - Shrink the default release binary: enable thin LTO, symbol stripping, and a single codegen unit.
 - Make parquet archive export opt-in via `--features export-parquet` (ndjson/csv/prometheus remain in the default build).
 
