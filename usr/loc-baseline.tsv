@@ -5,7 +5,7 @@ scout/src/commands.rs	405
 scout/src/diff_cmd.rs	356
 scout/src/output.rs	321
 scout/src/tui.rs	1344
-scout/tests/cli.rs	468
+scout/tests/cli.rs	470
 scout_lib/src/archive/diff.rs	447
 scout_lib/src/archive/export.rs	653
 scout_lib/src/archive/pull.rs	670
