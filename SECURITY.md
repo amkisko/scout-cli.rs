@@ -2,13 +2,11 @@
 
 ## Reporting a Vulnerability
 
-**Do NOT** open a public GitHub issue for security vulnerabilities.
+Do not open a public issue for security vulnerabilities.
 
-Email security details to: **security@kiskolabs.com**
+Email security details to: security@kiskolabs.com
 
 Include: description, steps to reproduce, potential impact, and suggested fix (if available).
-
-Alternatively, report confidentially via **GitHub**: use the repository's *Security* tab → *Report a vulnerability*, or open a [private security advisory](https://github.com/amkisko/scout-cli.rs/security/advisories/new).
 
 ### Response Timeline
 
@@ -25,16 +23,5 @@ Alternatively, report confidentially via **GitHub**: use the repository's *Secur
 
 ## Automation Security
 
-* **Context Isolation:** It is strictly forbidden to include production credentials, API keys, or Personally Identifiable Information (PII) in prompts sent to third-party LLMs or automation services.
-
-* **Supply Chain:** All automated dependencies must be verified.
-
-## API key handling (scout-cli)
-
-**Plain-text API keys are not supported.** The CLI does not accept the API key via environment variables (`API_KEY`, `SCOUT_APM_API_KEY`) or `--api-key`. You must use a secret backend (1Password, Bitwarden, or KeePassXC) so the key is never on the command line, in shell history, or in process lists.
-
-Home config (`~/.scout/config.env`, or `SCOUT_HOME`) may store secret-backend *pointers* (vault paths, item IDs). It must not store the API key itself.
-
-## Supported versions
-
-We release patches for the latest minor version. Security updates are prioritized for the current stable release.
+- Context Isolation: It is strictly forbidden to include production credentials, API keys, or Personally Identifiable Information (PII) in prompts sent to third-party LLMs or automation services.
+- Supply Chain: All automated dependencies must be verified.
