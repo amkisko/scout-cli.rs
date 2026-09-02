@@ -4,6 +4,8 @@
 
 ScoutAPM CLI — query apps, endpoints, traces, metrics, and errors from the terminal.
 
+Design changes go through `rfcs/` (RFC 0001).
+
 ## Requirements
 
 - Rust 1.70+ (for building from source), or use a pre-built package below.
