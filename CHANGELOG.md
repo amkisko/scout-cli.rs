@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `rfcs/` starter pack: process (RFC 0001), positioning (RFC 0002), and Standards Track design RFCs 0003–0005 for secrets, archive/diff/batch, and query output.
+
 ## 0.4.0 (2026-07-25)
 
 - Shrink the default release binary: enable thin LTO, symbol stripping, and a single codegen unit.
