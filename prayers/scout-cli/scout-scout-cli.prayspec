@@ -1,0 +1,17 @@
+Package::Specification.new do |spec|
+  spec.name = "scout/scout-cli"
+  spec.version = "1.0.0"
+  spec.summary = "ScoutAPM CLI usage for coding agents"
+  spec.files = [
+    "README.md",
+    "skills/scout-cli/SKILL.md",
+    "skills/scout-cli/scout-cli.md"
+  ]
+  spec.exports = {
+    "skill" => {
+      type: "folder",
+      path: "skills/scout-cli",
+      summary: "ScoutAPM CLI usage for agents"
+    }
+  }
+end

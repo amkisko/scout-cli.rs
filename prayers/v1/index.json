@@ -1,0 +1,6 @@
+{
+  "spec": "prayfile-distribution-1",
+  "packages": [
+    "scout/scout-cli"
+  ]
+}

@@ -6,6 +6,7 @@ pray do
 end
 
 source "amkisko", git: "https://github.com/amkisko/prayers.git", distribution: "prayers"
+publish "prayers", path: "prayers"
 
 compose "AGENTS.md" do
   pray ".agents/project.md"
@@ -34,6 +35,7 @@ tree ".agents/skills" do
   pray "amkisko/changelog-update", "~> 2.1"
   pray "amkisko/claims-audit", "~> 1.0"
   pray "amkisko/rfc-process", "~> 1.2"
+  pray "scout/scout-cli", path: "prayers/scout-cli"
 end
 
 pray "amkisko/community-security", "~> 1.2", file: "SECURITY.md"

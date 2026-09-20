@@ -113,7 +113,7 @@ fn range_diff_report(
     right_label: Option<String>,
     diff_fn: fn(&RangeSnapshotFile, &RangeSnapshotFile, &str, &str) -> DiffReport,
 ) -> Result<DiffReport, String> {
-    let app_id = app.resolve()?;
+    let app_id = app.resolve_numeric(None)?;
     let store = ArchiveStore::from_env()?;
     let left =
         load_range_snapshot_with_hint(&store, app_id, resource, &left_from, &left_to, &left_label)?;
@@ -139,7 +139,7 @@ fn metric_diff_report(
     left_label: Option<String>,
     right_label: Option<String>,
 ) -> Result<DiffReport, String> {
-    let app_id = app.resolve()?;
+    let app_id = app.resolve_numeric(None)?;
     let store = ArchiveStore::from_env()?;
     let left_bucket =
         load_metric_bucket_with_hint(&store, app_id, metric_type, &left_date, &left_label)?;

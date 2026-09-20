@@ -157,6 +157,8 @@ pub async fn run_batch(
         mode: output_mode,
         quiet: parent.quiet,
         app_id_override: parent.app_id,
+        web: parent.web,
+        no_input: parent.no_input,
         error_context: error_context(&parent),
     };
 

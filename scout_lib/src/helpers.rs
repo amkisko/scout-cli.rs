@@ -168,6 +168,137 @@ pub fn parse_scout_url(url: &str) -> Result<ParsedScoutUrl, String> {
     })
 }
 
+/// Web origin for ScoutAPM UI links.
+///
+/// Uses `SCOUT_API_BASE` when set, stripping a trailing `/api/v0`. Defaults to
+/// `https://scoutapm.com`.
+pub fn scout_web_origin() -> String {
+    if let Ok(base) = std::env::var("SCOUT_API_BASE") {
+        let trimmed = base.trim().trim_end_matches('/');
+        if !trimmed.is_empty() {
+            if let Some(origin) = trimmed.strip_suffix("/api/v0") {
+                let origin = origin.trim_end_matches('/');
+                if !origin.is_empty() {
+                    return origin.to_string();
+                }
+            }
+            return trimmed.to_string();
+        }
+    }
+    "https://scoutapm.com".to_string()
+}
+
+/// Build a ScoutAPM UI URL from parsed resource identifiers.
+pub fn build_scout_url(parsed: &ParsedScoutUrl) -> Result<String, String> {
+    let origin = scout_web_origin();
+    let app_id = parsed
+        .app_id
+        .ok_or_else(|| "cannot build web URL without app id".to_string())?;
+
+    let path = match parsed.url_type {
+        ScoutUrlType::App => format!("/apps/{app_id}"),
+        ScoutUrlType::Endpoint => {
+            let endpoint_id = parsed
+                .endpoint_id
+                .as_deref()
+                .ok_or_else(|| "cannot build endpoint URL without endpoint id".to_string())?;
+            format!("/apps/{app_id}/endpoints/{endpoint_id}")
+        }
+        ScoutUrlType::Trace => {
+            let endpoint_id = parsed
+                .endpoint_id
+                .as_deref()
+                .ok_or_else(|| "cannot build trace URL without endpoint id".to_string())?;
+            let trace_id = parsed
+                .trace_id
+                .ok_or_else(|| "cannot build trace URL without trace id".to_string())?;
+            format!("/apps/{app_id}/endpoints/{endpoint_id}/trace/{trace_id}")
+        }
+        ScoutUrlType::Job => {
+            let job_id = parsed
+                .job_id
+                .as_deref()
+                .ok_or_else(|| "cannot build job URL without job id".to_string())?;
+            format!("/apps/{app_id}/jobs/{job_id}")
+        }
+        ScoutUrlType::JobTrace => {
+            let job_id = parsed
+                .job_id
+                .as_deref()
+                .ok_or_else(|| "cannot build job trace URL without job id".to_string())?;
+            let trace_id = parsed
+                .trace_id
+                .ok_or_else(|| "cannot build job trace URL without trace id".to_string())?;
+            format!("/apps/{app_id}/jobs/{job_id}/trace/{trace_id}")
+        }
+        ScoutUrlType::ErrorGroup => {
+            let error_id = parsed
+                .error_id
+                .ok_or_else(|| "cannot build error URL without error id".to_string())?;
+            format!("/apps/{app_id}/error_groups/{error_id}")
+        }
+        ScoutUrlType::Insight => {
+            let insight_type = parsed
+                .insight_type
+                .as_deref()
+                .ok_or_else(|| "cannot build insight URL without insight type".to_string())?;
+            format!("/apps/{app_id}/insights/{insight_type}")
+        }
+        ScoutUrlType::Unknown => {
+            return Err("cannot build web URL for unknown resource type".to_string())
+        }
+    };
+
+    Ok(format!("{origin}{path}"))
+}
+
+/// Build an app permalink.
+pub fn build_app_url(app_id: u64) -> String {
+    format!("{}/apps/{app_id}", scout_web_origin())
+}
+
+/// Build an endpoint permalink.
+pub fn build_endpoint_url(app_id: u64, endpoint_id: &str) -> String {
+    format!(
+        "{}/apps/{app_id}/endpoints/{endpoint_id}",
+        scout_web_origin()
+    )
+}
+
+/// Build a job permalink.
+pub fn build_job_url(app_id: u64, job_id: &str) -> String {
+    format!("{}/apps/{app_id}/jobs/{job_id}", scout_web_origin())
+}
+
+/// Build a trace permalink (API-shaped path when endpoint is unknown).
+pub fn build_trace_url(app_id: u64, trace_id: u64) -> String {
+    format!("{}/apps/{app_id}/traces/{trace_id}", scout_web_origin())
+}
+
+/// Build a job-trace permalink.
+pub fn build_job_trace_url(app_id: u64, job_id: &str, trace_id: u64) -> String {
+    format!(
+        "{}/apps/{app_id}/jobs/{job_id}/trace/{trace_id}",
+        scout_web_origin()
+    )
+}
+
+/// Build an error group permalink.
+pub fn build_error_group_url(app_id: u64, error_id: u64) -> String {
+    format!(
+        "{}/apps/{app_id}/error_groups/{error_id}",
+        scout_web_origin()
+    )
+}
+
+/// Build a trace permalink under an endpoint.
+pub fn build_endpoint_trace_url(app_id: u64, endpoint_id: &str, trace_id: u64) -> String {
+    format!(
+        "{}/apps/{app_id}/endpoints/{endpoint_id}/trace/{trace_id}",
+        scout_web_origin()
+    )
+}
+
 /// Decode base64url endpoint ID to a readable string when possible.
 pub fn decode_endpoint_id(endpoint_id: &str) -> Result<String, String> {
     let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -332,6 +463,38 @@ mod tests {
     #[test]
     fn test_parse_scout_url_invalid() {
         assert!(parse_scout_url("not-a-url").is_err());
+    }
+
+    #[test]
+    fn test_build_scout_url_round_trip_trace() {
+        let url = "https://scoutapm.com/apps/123/endpoints/abc/trace/456";
+        let parsed = parse_scout_url(url).unwrap();
+        assert_eq!(build_scout_url(&parsed).unwrap(), url);
+    }
+
+    #[test]
+    fn test_build_app_url() {
+        assert_eq!(build_app_url(42), "https://scoutapm.com/apps/42");
+    }
+
+    #[test]
+    fn test_build_resource_urls() {
+        assert_eq!(
+            build_endpoint_url(1, "abc"),
+            "https://scoutapm.com/apps/1/endpoints/abc"
+        );
+        assert_eq!(
+            build_trace_url(1, 99),
+            "https://scoutapm.com/apps/1/traces/99"
+        );
+        assert_eq!(
+            build_job_url(1, "job"),
+            "https://scoutapm.com/apps/1/jobs/job"
+        );
+        assert_eq!(
+            build_endpoint_trace_url(1, "abc", 99),
+            "https://scoutapm.com/apps/1/endpoints/abc/trace/99"
+        );
     }
 
     #[test]

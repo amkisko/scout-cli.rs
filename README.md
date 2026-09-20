@@ -58,9 +58,24 @@ Use `--output json` with `list` or `get` for machine-readable output. Friendly k
 | `kpxc.db` | `SCOUT_KPXC_DB` |
 | `kpxc.entry` | `SCOUT_KPXC_ENTRY` |
 | `kpxc.attribute` | `SCOUT_KPXC_ATTRIBUTE` |
+| `app.id` | `SCOUT_APP_ID` |
+| `app.name` | `SCOUT_APP` |
 
-`scout config set` writes to `config.env` only. Plain-text API keys are rejected.
+`scout config set` writes to `config.env` only. Plain-text API keys are rejected. `app.id` and `app.name` are targeting defaults, not secrets.
 
+`APP` on query commands accepts a numeric id or an exact app name. Omit `APP` when `--app-id`, `SCOUT_APP_ID` / `app.id`, or `SCOUT_APP` / `app.name` supplies the target. Add `--web` to open the matching ScoutAPM UI URL (prints the URL on stderr with `--no-input` so JSON stdout stays one document).
+
+```bash
+scout endpoints my-app --range 1day
+scout app --app-id 42
+scout error 42 1001 --web --no-input
+scout setup                 # prefer pray install when Prayfile is present
+scout setup --copy          # write .agents/skills/scout-cli (honors --path)
+```
+
+### Agent skill (pray)
+
+Coding agents load Scout CLI usage from `.agents/skills/scout-cli`, provisioned by the in-repo prayer [`prayers/scout-cli`](prayers/scout-cli) (`scout/scout-cli`) through `Prayfile` and `pray install`. The published catalog is `prayers/v1/`. See [`prayers/scout-cli/README.md`](prayers/scout-cli/README.md) for consumer Prayfile stanzas and fallbacks. `scout setup` runs that path when pray is available; use `scout setup --copy` only when pray cannot provision the skill.
 ### API key (secret backends only)
 
 **Plain-text API keys are not supported.** The CLI does not accept `--api-key` or `API_KEY` / `SCOUT_APM_API_KEY` environment variables. You must use one of the supported secret backends so the key is never on the command line or in shell history.

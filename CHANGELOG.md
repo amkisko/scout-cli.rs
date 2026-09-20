@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Accept app name or id for `APP`; omit `APP` when `--app-id`, `app.id` / `SCOUT_APP_ID`, or `app.name` / `SCOUT_APP` is set (RFC 0006).
+- Load home config before CLI parsing so saved `app.id` / `app.name` defaults apply.
+- Add `--web` / `-w` to open the matching ScoutAPM UI URL (print on stderr with `--no-input`).
+- Add `scout setup` to provision the agent skill via pray when available; `--copy` honors `--path`.
+- Provision `.agents/skills/scout-cli` from the in-repo `scout/scout-cli` prayer (`prayers/scout-cli`) through `Prayfile`; publish the catalog under `prayers/v1/`.
+
 - Add `rfcs/` starter pack: process (RFC 0001), positioning (RFC 0002), and Standards Track design RFCs 0003–0005 for secrets, archive/diff/batch, and query output.
 
 ## 0.4.0 (2026-07-25)

@@ -4,21 +4,34 @@ use crate::cli::Commands;
 use crate::cli_error::ErrorContext;
 use crate::output::{self, OutputMode};
 use crate::util::{read_stdin_line, status_message, suggest_next_command};
-use scout_lib::{parse_scout_url, Client, Error};
+use crate::web;
+use scout_lib::{
+    build_app_url, build_endpoint_url, build_error_group_url, build_job_url, build_trace_url,
+    parse_scout_url, scout_web_origin, Client, Error,
+};
 use serde_json::Value;
 
 pub struct RunContext {
     pub mode: OutputMode,
     pub quiet: bool,
     pub app_id_override: Option<u64>,
+    pub web: bool,
+    pub no_input: bool,
     pub error_context: ErrorContext,
 }
 
-fn resolve_command_app_id(
+async fn resolve_command_app_id_async(
+    client: &Client,
     app: &crate::cli::AppIdArgs,
     override_id: Option<u64>,
-) -> Result<u64, String> {
-    crate::cli::resolve_app_id(app.app_id, override_id)
+) -> Result<u64, Error> {
+    let app_ref = app.as_ref_str();
+    if scout_lib::app_ref_needs_list(app_ref, override_id) {
+        let apps = client.list_apps(None).await?;
+        return scout_lib::resolve_app_target(app_ref, override_id, Some(&apps))
+            .map_err(Error::Other);
+    }
+    scout_lib::resolve_app_target(app_ref, override_id, None).map_err(Error::Other)
 }
 
 pub async fn run_api_command(
@@ -26,9 +39,86 @@ pub async fn run_api_command(
     command: Commands,
     context: &RunContext,
 ) -> Result<(), Error> {
+    let web_command = command.clone();
     let value = api_command_value(client, command, context).await?;
     output::emit_value(context.mode, &value).map_err(Error::Other)?;
+    if context.web {
+        if let Some(url) = web_url_for_command(client, &web_command, context).await? {
+            web::open_or_print_url(&url, context.no_input, context.quiet).map_err(Error::Other)?;
+        }
+    }
     Ok(())
+}
+
+async fn web_url_for_command(
+    client: &Client,
+    command: &Commands,
+    context: &RunContext,
+) -> Result<Option<String>, Error> {
+    match command {
+        Commands::Apps { .. } => Ok(Some(format!("{}/apps", scout_web_origin()))),
+        Commands::Error { app, error_id } | Commands::ErrorGroupErrors { app, error_id } => {
+            let app_id =
+                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            Ok(Some(build_error_group_url(app_id, *error_id)))
+        }
+        Commands::Insight {
+            app, insight_type, ..
+        } => {
+            let app_id =
+                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            Ok(Some(format!(
+                "{}/apps/{app_id}/insights/{insight_type}",
+                scout_web_origin()
+            )))
+        }
+        Commands::EndpointMetric {
+            app, endpoint_id, ..
+        }
+        | Commands::EndpointTraces {
+            app, endpoint_id, ..
+        } => {
+            let app_id =
+                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            Ok(Some(build_endpoint_url(app_id, endpoint_id)))
+        }
+        Commands::JobMetrics { app, job_id, .. }
+        | Commands::JobMetric { app, job_id, .. }
+        | Commands::JobTraces { app, job_id, .. } => {
+            let app_id =
+                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            Ok(Some(build_job_url(app_id, job_id)))
+        }
+        Commands::Trace { app, trace_id } => {
+            let app_id =
+                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            Ok(Some(build_trace_url(app_id, *trace_id)))
+        }
+        Commands::ParseUrl { url } => {
+            let url = if url == "-" {
+                read_stdin_line().map_err(Error::Other)?
+            } else {
+                url.clone()
+            };
+            Ok(Some(url))
+        }
+        Commands::App { app }
+        | Commands::Metrics { app }
+        | Commands::Metric { app, .. }
+        | Commands::Endpoints { app, .. }
+        | Commands::Jobs { app, .. }
+        | Commands::AnomalyEvents { app, .. }
+        | Commands::AnomalyEvent { app, .. }
+        | Commands::Errors { app, .. }
+        | Commands::Insights { app, .. }
+        | Commands::InsightsHistory { app, .. }
+        | Commands::InsightsHistoryByType { app, .. } => {
+            let app_id =
+                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            Ok(Some(build_app_url(app_id)))
+        }
+        _ => Ok(None),
+    }
 }
 
 pub async fn api_command_value(
@@ -53,14 +143,14 @@ pub async fn api_command_value(
         }
         Commands::App { app } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching application…");
             let app_value = client.get_app(app_id).await?;
             Ok(app_value)
         }
         Commands::Metrics { app } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching metric types…");
             let list = client.list_metrics(app_id).await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
@@ -73,7 +163,7 @@ pub async fn api_command_value(
             range,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching metric data…");
             let data = client
                 .get_metric(
@@ -96,7 +186,7 @@ pub async fn api_command_value(
             offset,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching endpoints…");
             let data = client
                 .list_endpoints(
@@ -126,7 +216,7 @@ pub async fn api_command_value(
             range,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching endpoint metric…");
             let data = client
                 .get_endpoint_metrics(
@@ -148,7 +238,7 @@ pub async fn api_command_value(
             range,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             validate_trace_window(from.as_deref(), to.as_deref(), range.as_deref())?;
             status_message(context.quiet, "Fetching endpoint traces…");
             let data = client
@@ -169,7 +259,7 @@ pub async fn api_command_value(
             range,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching jobs…");
             let data = client
                 .list_jobs(app_id, from.as_deref(), to.as_deref(), range.as_deref())
@@ -178,7 +268,7 @@ pub async fn api_command_value(
         }
         Commands::JobMetrics { app, job_id } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching job metrics…");
             let list = client.list_job_metrics(app_id, &job_id).await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
@@ -192,7 +282,7 @@ pub async fn api_command_value(
             range,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching job metric…");
             let data = client
                 .get_job_metrics(
@@ -214,7 +304,7 @@ pub async fn api_command_value(
             range,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             validate_trace_window(from.as_deref(), to.as_deref(), range.as_deref())?;
             status_message(context.quiet, "Fetching job traces…");
             let data = client
@@ -230,7 +320,7 @@ pub async fn api_command_value(
         }
         Commands::Trace { app, trace_id } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching trace…");
             let trace = client.fetch_trace(app_id, trace_id).await?;
             Ok(trace)
@@ -245,7 +335,7 @@ pub async fn api_command_value(
             endpoint,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching anomaly events…");
             let list = client
                 .list_anomaly_events(
@@ -265,7 +355,7 @@ pub async fn api_command_value(
             anomaly_event_id,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching anomaly event…");
             let event = client.get_anomaly_event(app_id, anomaly_event_id).await?;
             Ok(event)
@@ -277,7 +367,7 @@ pub async fn api_command_value(
             endpoint,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching error groups…");
             let list = client
                 .list_error_groups(app_id, from.as_deref(), to.as_deref(), endpoint.as_deref())
@@ -286,21 +376,21 @@ pub async fn api_command_value(
         }
         Commands::Error { app, error_id } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching error group…");
             let err = client.get_error_group(app_id, error_id).await?;
             Ok(err)
         }
         Commands::ErrorGroupErrors { app, error_id } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching errors in group…");
             let list = client.get_error_group_errors(app_id, error_id).await?;
             Ok(serde_json::to_value(&list).map_err(|e| Error::Other(e.to_string()))?)
         }
         Commands::Insights { app, limit } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching insights…");
             let data = client.get_all_insights(app_id, limit).await?;
             Ok(data)
@@ -311,7 +401,7 @@ pub async fn api_command_value(
             limit,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching insight…");
             let data = client
                 .get_insight_by_type(app_id, &insight_type, limit)
@@ -328,7 +418,7 @@ pub async fn api_command_value(
             pagination_page,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching insights history…");
             let data = client
                 .get_insights_history(
@@ -354,7 +444,7 @@ pub async fn api_command_value(
             pagination_page,
         } => {
             let app_id =
-                resolve_command_app_id(&app, context.app_id_override).map_err(Error::Other)?;
+                resolve_command_app_id_async(client, &app, context.app_id_override).await?;
             status_message(context.quiet, "Fetching insights history…");
             let data = client
                 .get_insights_history_by_type(
@@ -384,6 +474,7 @@ pub async fn api_command_value(
         | Commands::Diff { .. }
         | Commands::Archive { .. }
         | Commands::Batch { .. }
+        | Commands::Setup { .. }
         | Commands::Man
         | Commands::Version => Err(Error::Other(
             "command is handled outside api_command_value".to_string(),

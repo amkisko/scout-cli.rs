@@ -140,11 +140,23 @@ fn archive_status_value(app_id: Option<u64>) -> Result<serde_json::Value, String
 }
 
 fn archive_pull_plan_value(request: &ArchivePullRequest) -> Result<serde_json::Value, String> {
-    let app_id = request.app.resolve()?;
+    let app_id = request.app.resolve_numeric(None)?;
     let store = ArchiveStore::from_env()?;
     let options = build_pull_options(request)?;
     let plan = plan_pull(&store, app_id, &options)?;
     serde_json::to_value(plan).map_err(|error| error.to_string())
+}
+
+async fn resolve_archive_app(client: &Client, app: &AppIdArgs) -> Result<u64, String> {
+    let app_ref = app.as_ref_str();
+    if scout_lib::app_ref_needs_list(app_ref, None) {
+        let apps = client
+            .list_apps(None)
+            .await
+            .map_err(|error| error.to_string())?;
+        return scout_lib::resolve_app_target(app_ref, None, Some(&apps));
+    }
+    app.resolve_numeric(None)
 }
 
 async fn archive_pull_value(
@@ -152,7 +164,7 @@ async fn archive_pull_value(
     request: ArchivePullRequest,
     _context: &ArchiveContext,
 ) -> Result<serde_json::Value, String> {
-    let app_id = request.app.resolve()?;
+    let app_id = resolve_archive_app(client, &request.app).await?;
     let mut store = ArchiveStore::from_env()?;
     let options = build_pull_options(&request)?;
     let report = run_cancellable(pull_app_with_progress(
@@ -173,7 +185,7 @@ async fn archive_trace_value(
     force: bool,
     _context: &ArchiveContext,
 ) -> Result<serde_json::Value, String> {
-    let app_id = app.resolve()?;
+    let app_id = resolve_archive_app(client, &app).await?;
     let mut store = ArchiveStore::from_env()?;
     let action = run_cancellable(pull_trace_by_id(
         client, &mut store, app_id, trace_id, force,
@@ -201,7 +213,7 @@ fn archive_export_value(
 ) -> Result<serde_json::Value, String> {
     let store = ArchiveStore::from_env()?;
     let request = ExportRequest {
-        app_id: app.resolve()?,
+        app_id: app.resolve_numeric(None)?,
         resource: ExportResource::parse(&resource)?,
         format: ExportFormat::parse(&format)?,
         metric_type: metric,
@@ -287,7 +299,7 @@ pub async fn run_archive_pull(
         return run_archive_pull_plan(request, context);
     }
 
-    let app_id = request.app.resolve()?;
+    let app_id = resolve_archive_app(client, &request.app).await?;
     let mut store = ArchiveStore::from_env()?;
     let options = build_pull_options(&request)?;
     if !context.quiet {
@@ -323,7 +335,7 @@ pub async fn run_archive_trace(
     force: bool,
     context: &ArchiveContext,
 ) -> Result<(), String> {
-    let app_id = app.resolve()?;
+    let app_id = resolve_archive_app(client, &app).await?;
     let mut store = ArchiveStore::from_env()?;
     if !context.quiet {
         eprintln!("Archiving trace {trace_id} for app {app_id}");
@@ -382,7 +394,7 @@ fn run_export(
 ) -> Result<(), String> {
     let store = ArchiveStore::from_env()?;
     let request = ExportRequest {
-        app_id: app.resolve()?,
+        app_id: app.resolve_numeric(None)?,
         resource: ExportResource::parse(&resource)?,
         format: ExportFormat::parse(&format)?,
         metric_type: metric,
