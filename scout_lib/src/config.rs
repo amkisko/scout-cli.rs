@@ -71,6 +71,14 @@ const CONFIG_KEY_DEFS: &[ConfigKeyDef] = &[
         friendly: "kpxc.attribute",
         env: "SCOUT_KPXC_ATTRIBUTE",
     },
+    ConfigKeyDef {
+        friendly: "app.id",
+        env: "SCOUT_APP_ID",
+    },
+    ConfigKeyDef {
+        friendly: "app.name",
+        env: "SCOUT_APP",
+    },
 ];
 
 const ALLOWED_CONFIG_KEYS: &[&str] = &[
@@ -83,6 +91,8 @@ const ALLOWED_CONFIG_KEYS: &[&str] = &[
     "SCOUT_KPXC_DB",
     "SCOUT_KPXC_ENTRY",
     "SCOUT_KPXC_ATTRIBUTE",
+    "SCOUT_APP_ID",
+    "SCOUT_APP",
 ];
 
 /// Resolve the Scout config directory.
@@ -430,6 +440,8 @@ mod tests {
             friendly_config_key("SCOUT_BW_ITEM_ID").unwrap(),
             "bw.item_id"
         );
+        assert_eq!(resolve_config_key("app.id").unwrap(), "SCOUT_APP_ID");
+        assert_eq!(friendly_config_key("SCOUT_APP").unwrap(), "app.name");
         assert!(resolve_config_key("api.key").is_err());
     }
 

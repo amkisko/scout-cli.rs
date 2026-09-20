@@ -12,8 +12,10 @@ pub mod execute;
 pub mod exit;
 pub mod man;
 pub mod output;
+pub mod setup_cmd;
 pub mod tui;
 pub mod util;
+pub mod web;
 
 use clap::Parser;
 use cli::{Cli, Commands, ConfigCommands, OutputFormatArg, TuiTabArg};
@@ -24,6 +26,23 @@ use output::{OutputFormat, OutputMode};
 use scout_lib::{get_api_key, parse_scout_url, Client, Error};
 use std::process::ExitCode;
 
+/// Load `SCOUT_APP` from `SCOUT_APP_ID` when only the id default is configured.
+///
+/// Clap reads `SCOUT_APP` for the optional `APP` positional; config may only set
+/// `SCOUT_APP_ID` / `app.id`.
+fn seed_app_env_from_config_id() {
+    let app = std::env::var("SCOUT_APP").unwrap_or_default();
+    if !app.trim().is_empty() {
+        return;
+    }
+    if let Ok(app_id) = std::env::var("SCOUT_APP_ID") {
+        let app_id = app_id.trim();
+        if !app_id.is_empty() {
+            std::env::set_var("SCOUT_APP", app_id);
+        }
+    }
+}
+
 pub fn run() -> ExitCode {
     match try_run() {
         Ok(()) => AppExit::Success.code(),
@@ -32,6 +51,8 @@ pub fn run() -> ExitCode {
 }
 
 fn try_run() -> Result<(), AppExit> {
+    scout_lib::ensure_home_config_loaded();
+    seed_app_env_from_config_id();
     let cli = Cli::parse();
     let error_context = ErrorContext {
         quiet: cli.quiet,
@@ -52,9 +73,18 @@ fn try_run() -> Result<(), AppExit> {
         return man::run().map_err(|error| print_error(&error, &error_context));
     }
 
+    if let Some(Commands::Setup { copy, path }) = cli.command {
+        return setup_cmd::run(setup_cmd::SetupOptions {
+            copy,
+            path,
+            quiet: cli.quiet,
+        })
+        .map_err(|error| print_error(&error, &error_context));
+    }
+
     if let Some(Commands::ParseUrl { url }) = &cli.command {
         let mode = resolve_output_mode(&cli);
-        return run_parse_url(url.clone(), mode)
+        return run_parse_url(url.clone(), mode, cli.web, cli.no_input, cli.quiet)
             .map_err(|error| print_scout_error(&error, &error_context));
     }
 
@@ -157,6 +187,8 @@ async fn run_async(cli: Cli, error_context: ErrorContext) -> Result<(), AppExit>
         mode,
         quiet: cli.quiet,
         app_id_override: cli.app_id,
+        web: cli.web,
+        no_input: cli.no_input,
         error_context: error_context.clone(),
     };
 
@@ -274,7 +306,13 @@ fn run_config(
     })
 }
 
-fn run_parse_url(url: String, mode: OutputMode) -> Result<(), Error> {
+fn run_parse_url(
+    url: String,
+    mode: OutputMode,
+    web: bool,
+    no_input: bool,
+    quiet: bool,
+) -> Result<(), Error> {
     let url = if url == "-" {
         util::read_stdin_line().map_err(Error::Other)?
     } else {
@@ -282,5 +320,9 @@ fn run_parse_url(url: String, mode: OutputMode) -> Result<(), Error> {
     };
     let parsed = parse_scout_url(&url).map_err(Error::Other)?;
     let value = serde_json::to_value(&parsed).map_err(|error| Error::Other(error.to_string()))?;
-    output::emit_value(mode, &value).map_err(Error::Other)
+    output::emit_value(mode, &value).map_err(Error::Other)?;
+    if web {
+        web::open_or_print_url(&url, no_input, quiet).map_err(Error::Other)?;
+    }
+    Ok(())
 }

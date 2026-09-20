@@ -1,0 +1,61 @@
+{
+  "name": "scout/scout-cli",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "artifact": "v1/artifacts/scout/scout-cli/1.0.0/scout-scout-cli-1.0.0.praypkg",
+      "artifact_hash": "sha256:78150135149759b1cff17981fdfab714601ee85e27a87bf820c0803be4d3756f",
+      "tree_hash": "sha256:a23ee76d40cd50f5203dec87a14ec2546ffe619ad1831934b1b79dce6aacb0c6",
+      "yanked": false,
+      "targets": [],
+      "exports": [
+        "skill"
+      ],
+      "signer": "amkisko",
+      "published_at": 1789892148,
+      "signature": "sha256:bae4f346faf56fa13daf604616d6e5d661380f15627f30f072a2f4ccd06d5178",
+      "derived_metadata": {
+        "summary": "ScoutAPM CLI usage for coding agents — ScoutAPM CLI usage for agents",
+        "topics": [
+          "scout",
+          "json",
+          "agents",
+          "batch",
+          "pray"
+        ],
+        "categories": [
+          "automation"
+        ],
+        "possible_effects": [
+          "reduces manual steps"
+        ],
+        "embeddings": [
+          {
+            "model": "pray-hash-bucket-v1",
+            "vector": [
+              19,
+              7,
+              30,
+              12,
+              15,
+              30,
+              47,
+              12,
+              12,
+              23,
+              8,
+              14,
+              34,
+              13,
+              17,
+              12
+            ]
+          }
+        ],
+        "file_count": 3,
+        "character_count": 3101,
+        "token_count": 305
+      }
+    }
+  ]
+}

@@ -468,3 +468,117 @@ fn batch_without_fail_fast_runs_remaining_operations() {
 
     let _ = std::fs::remove_dir_all(temp_home);
 }
+
+#[test]
+fn setup_copy_writes_skill_tree() {
+    let dest = std::env::temp_dir().join(format!("scout-setup-cli-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dest);
+
+    scout()
+        .arg("setup")
+        .arg("--copy")
+        .arg("--path")
+        .arg(&dest)
+        .arg("--quiet")
+        .assert()
+        .success();
+
+    assert!(dest.join("SKILL.md").is_file());
+    assert!(dest.join("scout-cli.md").is_file());
+    let body = std::fs::read_to_string(dest.join("scout-cli.md")).unwrap();
+    assert!(body.contains("scout batch"));
+    let _ = std::fs::remove_dir_all(dest);
+}
+
+#[test]
+fn parse_url_web_no_input_prints_url_on_stderr() {
+    scout()
+        .arg("parse-url")
+        .arg("https://scoutapm.com/apps/42")
+        .arg("--web")
+        .arg("--no-input")
+        .arg("--json")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"app_id\":42"))
+        .stdout(predicate::str::contains("https://scoutapm.com/apps/42").not())
+        .stderr(predicate::str::contains("https://scoutapm.com/apps/42"));
+}
+
+#[test]
+fn app_id_flag_without_positional_passes_clap() {
+    let temp_home = std::env::temp_dir().join(format!("scout-app-id-flag-{}", std::process::id()));
+    std::fs::create_dir_all(&temp_home).unwrap();
+
+    scout()
+        .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
+        .env_remove("SCOUT_APP")
+        .env_remove("SCOUT_APP_ID")
+        .env_remove("SCOUT_OP_ENTRY_PATH")
+        .env_remove("SCOUT_BW_ITEM_ID")
+        .env_remove("SCOUT_KPXC_DB")
+        .arg("app")
+        .arg("--app-id")
+        .arg("42")
+        .assert()
+        .failure()
+        .code(3)
+        .stderr(predicate::str::contains("API key not found"));
+
+    let _ = std::fs::remove_dir_all(temp_home);
+}
+
+#[test]
+fn config_app_id_default_reaches_archive_dry_run() {
+    let temp_home = std::env::temp_dir().join(format!("scout-app-id-cfg-{}", std::process::id()));
+    std::fs::create_dir_all(&temp_home).unwrap();
+    std::fs::write(temp_home.join("config.env"), "SCOUT_APP_ID=42\n").unwrap();
+
+    scout()
+        .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
+        .env_remove("SCOUT_APP")
+        .env_remove("SCOUT_APP_ID")
+        .arg("archive")
+        .arg("pull")
+        .arg("--dry-run")
+        .arg("--range")
+        .arg("1day")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("42").or(predicate::str::contains("app")));
+
+    let _ = std::fs::remove_dir_all(temp_home);
+}
+
+#[test]
+fn config_app_name_default_reaches_clap_without_usage_error() {
+    let temp_home = std::env::temp_dir().join(format!("scout-app-name-cfg-{}", std::process::id()));
+    std::fs::create_dir_all(&temp_home).unwrap();
+    std::fs::write(temp_home.join("config.env"), "SCOUT_APP=my-app\n").unwrap();
+
+    scout()
+        .env("SCOUT_HOME", temp_home.to_string_lossy().to_string())
+        .env_remove("SCOUT_APP")
+        .env_remove("SCOUT_APP_ID")
+        .env_remove("SCOUT_OP_ENTRY_PATH")
+        .env_remove("SCOUT_BW_ITEM_ID")
+        .env_remove("SCOUT_KPXC_DB")
+        .arg("app")
+        .assert()
+        .failure()
+        .code(3)
+        .stderr(predicate::str::contains("API key not found"))
+        .stderr(predicate::str::contains("required arguments").not());
+
+    let _ = std::fs::remove_dir_all(temp_home);
+}
+
+#[test]
+fn help_documents_setup_and_web() {
+    scout()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--web"))
+        .stdout(predicate::str::contains("setup"));
+}

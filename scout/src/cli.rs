@@ -8,8 +8,10 @@ Query ScoutAPM apps, endpoints, traces, metrics, and errors from the terminal.
 Examples:
   scout apps
   scout endpoints 123 --range 1day
+  scout endpoints my-app --range 1day --web
   scout metric 123 response_time --range 7days
   scout parse-url \"https://scoutapm.com/apps/123\"
+  scout setup
   echo '[{\"args\":[\"archive\",\"path\"]}]' | scout batch
 
 Documentation: https://github.com/amkisko/scout-cli.rs
@@ -22,6 +24,11 @@ Output:
   --plain           Script-stable tab-separated records
   -o json           Pretty JSON (backward compatible)
   --json            Compact JSON for scripts
+
+App targeting:
+  APP               Numeric id or exact app name (optional when --app-id / SCOUT_APP / SCOUT_APP_ID is set)
+  --app-id / SCOUT_APP_ID / app.id
+  SCOUT_APP / app.name
 
 Batch (`scout batch`): stdout is always a JSON report; use --json-pretty for indented output.
 
@@ -95,9 +102,18 @@ pub struct Cli {
     #[arg(long, global = true, env = "SCOUT_API_BASE")]
     pub api_base: Option<String>,
 
-    /// Override the application ID for subcommands that take APP_ID.
-    #[arg(long = "app-id", global = true, value_name = "APP_ID")]
+    /// Override the application id for subcommands that take APP.
+    #[arg(
+        long = "app-id",
+        global = true,
+        value_name = "APP_ID",
+        env = "SCOUT_APP_ID"
+    )]
     pub app_id: Option<u64>,
+
+    /// Open the matching ScoutAPM UI URL after a successful command.
+    #[arg(short = 'w', long = "web", global = true)]
+    pub web: bool,
 
     /// Start with this app selected in the interactive TUI.
     #[arg(long, global = true, hide = true)]
@@ -141,23 +157,30 @@ pub enum OutputFormatArg {
 
 #[derive(Clone, Args)]
 pub struct AppIdArgs {
-    /// Application ID (or pass `--app-id`).
-    #[arg(value_name = "APP_ID")]
-    pub app_id: u64,
+    /// Application id or exact name (or `SCOUT_APP` / `--app-id` / `SCOUT_APP_ID`).
+    #[arg(value_name = "APP", env = "SCOUT_APP")]
+    pub app: Option<String>,
 }
 
 impl AppIdArgs {
-    pub fn resolve(&self) -> Result<u64, String> {
-        Ok(self.app_id)
+    pub fn as_ref_str(&self) -> Option<&str> {
+        self.app
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
     }
-}
 
-pub fn resolve_app_id(positional: u64, flag: Option<u64>) -> Result<u64, String> {
-    match flag {
-        Some(flag_id) if flag_id != positional => {
-            Err("provide only one of APP_ID or --app-id".to_string())
+    /// Resolve a numeric app id without calling the API.
+    ///
+    /// Name refs fail closed; use API resolution for names.
+    pub fn resolve_numeric(&self, flag: Option<u64>) -> Result<u64, String> {
+        if scout_lib::app_ref_needs_list(self.as_ref_str(), flag) {
+            return Err(
+                "this command needs a numeric APP or --app-id (name resolution requires the API)"
+                    .to_string(),
+            );
         }
-        _ => Ok(positional),
+        scout_lib::resolve_app_target(self.as_ref_str(), flag, None)
     }
 }
 
@@ -189,7 +212,11 @@ pub enum Commands {
     },
 
     /// Get time-series metric data
-    #[command(arg_required_else_help = true, next_help_heading = "Metrics")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Metrics"
+    )]
     Metric {
         #[command(flatten)]
         app: AppIdArgs,
@@ -223,7 +250,11 @@ pub enum Commands {
     },
 
     /// Get metric data for a specific endpoint
-    #[command(arg_required_else_help = true, next_help_heading = "Metrics")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Metrics"
+    )]
     EndpointMetric {
         #[command(flatten)]
         app: AppIdArgs,
@@ -239,7 +270,11 @@ pub enum Commands {
     },
 
     /// List traces for an endpoint (max 100, within 7 days)
-    #[command(arg_required_else_help = true, next_help_heading = "Traces")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Traces"
+    )]
     EndpointTraces {
         #[command(flatten)]
         app: AppIdArgs,
@@ -266,7 +301,11 @@ pub enum Commands {
     },
 
     /// List available job metrics
-    #[command(arg_required_else_help = true, next_help_heading = "Jobs")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Jobs"
+    )]
     JobMetrics {
         #[command(flatten)]
         app: AppIdArgs,
@@ -274,7 +313,11 @@ pub enum Commands {
     },
 
     /// Get job metrics
-    #[command(arg_required_else_help = true, next_help_heading = "Jobs")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Jobs"
+    )]
     JobMetric {
         #[command(flatten)]
         app: AppIdArgs,
@@ -290,7 +333,11 @@ pub enum Commands {
     },
 
     /// List traces for a job (max 100, within 7 days)
-    #[command(arg_required_else_help = true, next_help_heading = "Traces")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Traces"
+    )]
     JobTraces {
         #[command(flatten)]
         app: AppIdArgs,
@@ -304,7 +351,11 @@ pub enum Commands {
     },
 
     /// Fetch a trace
-    #[command(arg_required_else_help = true, next_help_heading = "Traces")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Traces"
+    )]
     Trace {
         #[command(flatten)]
         app: AppIdArgs,
@@ -331,7 +382,11 @@ pub enum Commands {
     },
 
     /// Show one anomaly event
-    #[command(arg_required_else_help = true, next_help_heading = "Anomalies")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Anomalies"
+    )]
     AnomalyEvent {
         #[command(flatten)]
         app: AppIdArgs,
@@ -352,7 +407,11 @@ pub enum Commands {
     },
 
     /// Show one error group
-    #[command(arg_required_else_help = true, next_help_heading = "Errors")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Errors"
+    )]
     Error {
         #[command(flatten)]
         app: AppIdArgs,
@@ -360,7 +419,11 @@ pub enum Commands {
     },
 
     /// List individual errors in an error group (max 100)
-    #[command(arg_required_else_help = true, next_help_heading = "Errors")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Errors"
+    )]
     ErrorGroupErrors {
         #[command(flatten)]
         app: AppIdArgs,
@@ -377,7 +440,11 @@ pub enum Commands {
     },
 
     /// Get insight by type
-    #[command(arg_required_else_help = true, next_help_heading = "Insights")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Insights"
+    )]
     Insight {
         #[command(flatten)]
         app: AppIdArgs,
@@ -407,7 +474,11 @@ pub enum Commands {
     },
 
     /// Get insights history by type
-    #[command(arg_required_else_help = true, next_help_heading = "Insights")]
+    #[command(
+        arg_required_else_help = true,
+        allow_missing_positional = true,
+        next_help_heading = "Insights"
+    )]
     InsightsHistoryByType {
         #[command(flatten)]
         app: AppIdArgs,
@@ -438,6 +509,26 @@ pub enum Commands {
     ParseUrl {
         /// URL to parse, or `-` to read from stdin
         url: String,
+    },
+
+    /// Provision the scout agent skill (pray-first)
+    #[command(
+        after_help = "Prefers pray when available:\n  \
+          1. Detect Prayfile and run `pray install`\n  \
+          2. If pray is missing, print install guidance\n  \
+          3. Use --copy only as a fallback to write `.agents/skills/scout-cli`\n\n\
+          Examples:\n  \
+          scout setup\n  \
+          scout setup --copy",
+        next_help_heading = "Utilities"
+    )]
+    Setup {
+        /// Copy the skill tree into the project when pray cannot provision it.
+        #[arg(long)]
+        copy: bool,
+        /// Destination directory for --copy (default: .agents/skills/scout-cli).
+        #[arg(long, value_name = "DIR")]
+        path: Option<std::path::PathBuf>,
     },
 
     /// Manage Scout config (`scout config path` shows the directory)
@@ -536,6 +627,7 @@ pub enum DiffCommands {
         right_label: Option<String>,
     },
     /// Diff daily metric buckets for two dates
+    #[command(allow_missing_positional = true)]
     Metrics {
         #[command(flatten)]
         app: AppIdArgs,
@@ -597,6 +689,7 @@ pub enum ArchiveCommands {
         app_id: Option<u64>,
     },
     /// Fetch from ScoutAPM and store idempotently
+    #[command(allow_missing_positional = true)]
     Pull {
         #[command(flatten)]
         app: AppIdArgs,
@@ -626,6 +719,7 @@ pub enum ArchiveCommands {
         dry_run: bool,
     },
     /// Fetch and store one trace by ID (idempotent)
+    #[command(allow_missing_positional = true)]
     Trace {
         #[command(flatten)]
         app: AppIdArgs,

@@ -18,6 +18,7 @@ pub fn command_requires_api(command: &Commands) -> bool {
         | Commands::Completions { .. }
         | Commands::Man
         | Commands::Version
+        | Commands::Setup { .. }
         | Commands::Batch { .. } => false,
         Commands::Archive { command } => matches!(
             command,
@@ -32,6 +33,7 @@ pub fn command_allowed_in_batch(command: &Commands) -> Result<(), String> {
         Commands::Completions { .. } => Err("completions cannot run inside batch".to_string()),
         Commands::Man => Err("man cannot run inside batch".to_string()),
         Commands::Version => Err("use batch only for data commands".to_string()),
+        Commands::Setup { .. } => Err("setup cannot run inside batch".to_string()),
         Commands::Batch { .. } => Err("nested batch is not supported".to_string()),
         Commands::Config {
             command: ConfigCommands::Set { .. } | ConfigCommands::Unset { .. },
