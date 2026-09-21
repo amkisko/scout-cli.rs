@@ -221,6 +221,7 @@ scout archive status 123
 scout archive pull 123 --range 1day
 scout archive pull 123 --dry-run --range 1day
 scout archive pull 123 --incremental
+scout archive pull 123 --range max --dry-run
 scout archive pull 123 --from 2025-01-01T00:00:00Z --to 2025-01-02T00:00:00Z --resource metrics --resource endpoints
 
 # Diff archived snapshots (local only, no API calls)
@@ -231,9 +232,8 @@ scout diff errors 123 --left-from ... --left-to ... --right-from ... --right-to 
 scout diff jobs 123 --left-from ... --left-to ... --right-from ... --right-to ...
 scout diff metrics 123 response_time --left-date 2025-01-01 --right-date 2025-01-08
 
-# Archive one trace or pull traces from endpoint listings
+# Archive one trace (bulk `--resource traces` is a sample fetch, not the default pull)
 scout archive trace 123 456
-scout archive pull 123 --resource traces --range 1day
 scout archive pull 123 --trace-id 456 --trace-id 789
 
 # Export archived data for other systems
@@ -248,7 +248,7 @@ echo '[{"args":["archive","path"]},{"args":["config","path"]}]' | scout batch
 scout batch --file plan.json
 ```
 
-Archive data is stored under `$SCOUT_ARCHIVE_HOME` (default: `{SCOUT_HOME}/archive`). Pulls are idempotent: existing range snapshots are skipped, and metric points are merged into daily buckets without overwriting known timestamps.
+Archive data is stored under `$SCOUT_ARCHIVE_HOME` (default: `{SCOUT_HOME}/archive`). Default pull stores app metadata, daily metric buckets, endpoint and job listings, per-endpoint and per-job metric series, errors, anomalies, and insights. Traces stay out of that set; fetch one with `archive trace` or `--trace-id`. Pulls are idempotent: existing range snapshots are skipped, metric points merge into daily buckets without overwriting known timestamps, and a refused Scout window is recorded without aborting the rest of the pull. `--range max` is 30 days, then each resource clamps to its Scout cap (errors and anomalies just under 30 days, traces just under 7 days).
 
 `scout batch` runs several operations in one invocation. Each item is a normal scout subcommand (`args` array). Scout resolves API access only when an operation needs it; local commands such as `archive status` or `diff` use on-disk data. Output is always a JSON report on stdout with per-operation `ok`, `data`, and `error` fields; use `--json-pretty` for indented output. Pass `--fail-fast` to stop after the first failed operation. Nested batch and `config set`/`unset` are rejected. Run `scout batch` in a terminal without `--file` or piped input for concise usage help.
 

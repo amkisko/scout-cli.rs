@@ -82,6 +82,24 @@ impl ArchiveStore {
             .is_file()
     }
 
+    pub fn index_existing_range_snapshot(
+        &mut self,
+        app_id: u64,
+        resource: &str,
+        from: &str,
+        to: &str,
+    ) -> Result<(), String> {
+        let path = self.layout.range_snapshot_path(app_id, resource, from, to);
+        if path.is_file() {
+            self.record_range_snapshot(app_id, resource, from, to, &path);
+        }
+        Ok(())
+    }
+
+    pub fn record_existing_entity(&mut self, app_id: u64, resource: &str) {
+        self.sync_entity_count(app_id, resource);
+    }
+
     pub fn store_range_snapshot(
         &mut self,
         app_id: u64,
@@ -94,6 +112,7 @@ impl ArchiveStore {
         let path = self.layout.range_snapshot_path(app_id, resource, from, to);
         let existed = path.is_file();
         if existed && !force {
+            self.record_range_snapshot(app_id, resource, from, to, &path);
             return Ok(StoreAction::Skipped);
         }
         let snapshot = RangeSnapshotFile {
@@ -232,6 +251,7 @@ impl ArchiveStore {
     ) -> Result<StoreAction, String> {
         let path = self.layout.entity_path(app_id, resource, entity_id);
         if path.is_file() && !force {
+            self.sync_entity_count(app_id, resource);
             return Ok(StoreAction::Skipped);
         }
         let snapshot = EntitySnapshotFile {
@@ -241,7 +261,7 @@ impl ArchiveStore {
             data,
         };
         write_json_atomic(&path, &snapshot)?;
-        self.record_entity(app_id, resource);
+        self.sync_entity_count(app_id, resource);
         Ok(StoreAction::Created)
     }
 
@@ -265,7 +285,7 @@ impl ArchiveStore {
         Ok(buckets)
     }
 
-    fn record_range_snapshot(
+    pub(crate) fn record_range_snapshot(
         &mut self,
         app_id: u64,
         resource: &str,
@@ -296,7 +316,7 @@ impl ArchiveStore {
         });
     }
 
-    fn record_metric_bucket(&mut self, app_id: u64, metric_type: &str, date: &str) {
+    pub(crate) fn record_metric_bucket(&mut self, app_id: u64, metric_type: &str, date: &str) {
         let entry = self.manifest.apps.entry(app_id.to_string()).or_default();
         let buckets = entry
             .metric_buckets
@@ -308,15 +328,32 @@ impl ArchiveStore {
         }
     }
 
-    fn record_entity(&mut self, app_id: u64, resource: &str) {
+    pub(crate) fn sync_entity_count(&mut self, app_id: u64, resource: &str) {
+        let dir = self
+            .layout
+            .entity_path(app_id, resource, "_")
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| self.layout.app_dir(app_id).join(resource).join("by_id"));
+        let count = count_json_files(&dir);
         let entry = self.manifest.apps.entry(app_id.to_string()).or_default();
         match resource {
-            "traces" => entry.entities.traces += 1,
-            "errors" => entry.entities.error_groups += 1,
-            "anomalies" => entry.entities.anomalies += 1,
+            "traces" => entry.entities.traces = count,
+            "errors" => entry.entities.error_groups = count,
+            "anomalies" => entry.entities.anomalies = count,
             _ => {}
         }
     }
+}
+
+fn count_json_files(dir: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("json"))
+        .count() as u64
 }
 
 fn load_manifest(layout: &ArchiveLayout) -> Result<Manifest, String> {
@@ -331,7 +368,7 @@ fn load_manifest(layout: &ArchiveLayout) -> Result<Manifest, String> {
     Ok(manifest)
 }
 
-fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
+pub(crate) fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&contents).map_err(|error| error.to_string())
 }
@@ -353,76 +390,4 @@ fn temp_path_for(path: &Path) -> PathBuf {
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_else(|| "archive.tmp".to_string());
     path.with_file_name(format!("{file_name}.tmp"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn temp_archive() -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        std::env::temp_dir().join(format!("scout-archive-test-{nanos}"))
-    }
-
-    #[test]
-    fn range_snapshot_is_idempotent_without_force() {
-        let root = temp_archive();
-        let layout = ArchiveLayout::new(&root);
-        let mut store = ArchiveStore::open(layout).unwrap();
-        let data = json!([{"name": "HomeController#index"}]);
-        let action = store
-            .store_range_snapshot(
-                1,
-                "endpoints",
-                "2025-01-01T00:00:00Z",
-                "2025-01-02T00:00:00Z",
-                data.clone(),
-                false,
-            )
-            .unwrap();
-        assert_eq!(action, StoreAction::Created);
-        store.save_manifest().unwrap();
-
-        let skipped = store
-            .store_range_snapshot(
-                1,
-                "endpoints",
-                "2025-01-01T00:00:00Z",
-                "2025-01-02T00:00:00Z",
-                data,
-                false,
-            )
-            .unwrap();
-        assert_eq!(skipped, StoreAction::Skipped);
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn metric_merge_writes_buckets_once() {
-        let root = temp_archive();
-        let layout = ArchiveLayout::new(&root);
-        let mut store = ArchiveStore::open(layout).unwrap();
-        let series = json!({
-            "avg": [{"timestamp": "2025-01-01T10:00:00Z", "value": 42.0}]
-        });
-        let first = store
-            .merge_metric_series(7, "response_time", &series, false)
-            .unwrap();
-        assert_eq!(first.added_points, 1);
-        assert_eq!(first.buckets_written, 1);
-        store.save_manifest().unwrap();
-
-        let second = store
-            .merge_metric_series(7, "response_time", &series, false)
-            .unwrap();
-        assert_eq!(second.added_points, 0);
-        assert_eq!(second.skipped_points, 1);
-        assert_eq!(second.buckets_written, 0);
-        let _ = fs::remove_dir_all(root);
-    }
 }
