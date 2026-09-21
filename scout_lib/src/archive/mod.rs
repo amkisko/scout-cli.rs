@@ -2,10 +2,16 @@
 
 mod diff;
 mod export;
+mod fetch;
+mod item_series;
 mod layout;
 mod metrics;
 mod pull;
+mod reindex;
+mod resource;
 mod store;
+mod traces;
+mod windows;
 
 pub use metrics::MetricBucket;
 
@@ -17,6 +23,6 @@ pub use export::{export_archive, ExportFormat, ExportReport, ExportRequest, Expo
 pub use layout::{archive_home, range_key, ArchiveLayout, RangeSnapshotMeta, MANIFEST_VERSION};
 pub use pull::{
     format_pull_summary, plan_pull, pull_app, pull_app_with_progress, pull_trace_by_id,
-    PullOptions, PullPlan, PullReport, PullResource, DEFAULT_METRICS,
+    PullOptions, PullPlan, PullRefusal, PullReport, PullResource, DEFAULT_METRICS,
 };
 pub use store::{ArchiveStore, MetricMergeReport, RangeSnapshotFile, StoreAction};

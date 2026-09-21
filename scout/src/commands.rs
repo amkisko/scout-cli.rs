@@ -58,15 +58,13 @@ async fn web_url_for_command(
     match command {
         Commands::Apps { .. } => Ok(Some(format!("{}/apps", scout_web_origin()))),
         Commands::Error { app, error_id } | Commands::ErrorGroupErrors { app, error_id } => {
-            let app_id =
-                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            let app_id = resolve_command_app_id_async(client, app, context.app_id_override).await?;
             Ok(Some(build_error_group_url(app_id, *error_id)))
         }
         Commands::Insight {
             app, insight_type, ..
         } => {
-            let app_id =
-                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            let app_id = resolve_command_app_id_async(client, app, context.app_id_override).await?;
             Ok(Some(format!(
                 "{}/apps/{app_id}/insights/{insight_type}",
                 scout_web_origin()
@@ -78,20 +76,17 @@ async fn web_url_for_command(
         | Commands::EndpointTraces {
             app, endpoint_id, ..
         } => {
-            let app_id =
-                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            let app_id = resolve_command_app_id_async(client, app, context.app_id_override).await?;
             Ok(Some(build_endpoint_url(app_id, endpoint_id)))
         }
         Commands::JobMetrics { app, job_id, .. }
         | Commands::JobMetric { app, job_id, .. }
         | Commands::JobTraces { app, job_id, .. } => {
-            let app_id =
-                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            let app_id = resolve_command_app_id_async(client, app, context.app_id_override).await?;
             Ok(Some(build_job_url(app_id, job_id)))
         }
         Commands::Trace { app, trace_id } => {
-            let app_id =
-                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            let app_id = resolve_command_app_id_async(client, app, context.app_id_override).await?;
             Ok(Some(build_trace_url(app_id, *trace_id)))
         }
         Commands::ParseUrl { url } => {
@@ -113,8 +108,7 @@ async fn web_url_for_command(
         | Commands::Insights { app, .. }
         | Commands::InsightsHistory { app, .. }
         | Commands::InsightsHistoryByType { app, .. } => {
-            let app_id =
-                resolve_command_app_id_async(client, app, context.app_id_override).await?;
+            let app_id = resolve_command_app_id_async(client, app, context.app_id_override).await?;
             Ok(Some(build_app_url(app_id)))
         }
         _ => Ok(None),

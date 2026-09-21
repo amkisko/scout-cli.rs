@@ -334,7 +334,7 @@ fn metric_series_map(series: &Value) -> BTreeMap<String, f64> {
         };
         let values: Vec<f64> = points
             .iter()
-            .filter_map(|point| point.get("value").and_then(Value::as_f64))
+            .filter_map(crate::archive::metrics::point_value)
             .collect();
         if values.is_empty() {
             continue;

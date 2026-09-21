@@ -16,8 +16,8 @@ pub use archive::{
     archive_home, diff_endpoints, diff_errors, diff_jobs, diff_metric_buckets, export_archive,
     format_pull_summary, plan_pull, pull_app, pull_app_with_progress, pull_trace_by_id,
     ArchiveLayout, ArchiveStore, DiffChange, DiffReport, DiffResource, DiffSide, ExportFormat,
-    ExportReport, ExportRequest, ExportResource, MetricBucket, PullOptions, PullPlan, PullReport,
-    PullResource, RangeSnapshotFile, StoreAction, MANIFEST_VERSION,
+    ExportReport, ExportRequest, ExportResource, MetricBucket, PullOptions, PullPlan, PullRefusal,
+    PullReport, PullResource, RangeSnapshotFile, StoreAction, MANIFEST_VERSION,
 };
 pub use client::Client;
 pub use config::{
