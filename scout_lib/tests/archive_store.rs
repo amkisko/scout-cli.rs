@@ -1,14 +1,18 @@
 use scout_lib::{ArchiveLayout, ArchiveStore, StoreAction};
 use serde_json::json;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static TEMP_ARCHIVE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn temp_archive() -> PathBuf {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!("scout-archive-itest-{nanos}"))
+    let seq = TEMP_ARCHIVE_SEQ.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("scout-archive-itest-{nanos}-{seq}"))
 }
 
 #[test]

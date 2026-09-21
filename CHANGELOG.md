@@ -2,18 +2,18 @@
 
 ## Unreleased
 
+## 0.5.0 (2026-09-21)
+
 - Store Scout metric series that arrive as `[timestamp, value]` tuples so `archive pull --resource metrics` writes daily buckets and `scout diff metrics` can read them.
 - Apply a per-resource lookback when pulling an archive; record a refused Scout window and continue the rest of the pull. `--range max` is 30 days before those clamps.
 - Write the archive manifest after each resource and reindex files already on disk so `archive status` is not `manifest: null` after a mid-pull failure.
 - Default `archive pull` stores app metrics, endpoint and job listings, per-endpoint and per-job series, errors, anomalies, and insights. Traces stay out of that set; fetch one with `archive trace` or `--trace-id`. `--trace-endpoint-limit 0` means all endpoints and jobs.
 - Document `--resource`, `--range`, `--from`, `--to`, and the 7-day and 30-day Scout caps in `archive pull --help`.
-
 - Accept app name or id for `APP`; omit `APP` when `--app-id`, `app.id` / `SCOUT_APP_ID`, or `app.name` / `SCOUT_APP` is set (RFC 0006).
 - Load home config before CLI parsing so saved `app.id` / `app.name` defaults apply.
 - Add `--web` / `-w` to open the matching ScoutAPM UI URL (print on stderr with `--no-input`).
 - Add `scout setup` to provision the agent skill via pray when available; `--copy` honors `--path`.
 - Provision `.agents/skills/scout-cli` from the in-repo `scout/scout-cli` prayer (`prayers/scout-cli`) through `Prayfile`; publish the catalog under `prayers/v1/`.
-
 - Add `rfcs/` starter pack: process (RFC 0001), positioning (RFC 0002), and Standards Track design RFCs 0003–0005 for secrets, archive/diff/batch, and query output.
 
 ## 0.4.0 (2026-07-25)
