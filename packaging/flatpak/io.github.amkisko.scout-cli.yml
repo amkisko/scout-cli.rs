@@ -19,5 +19,5 @@ modules:
     sources:
       - type: git
         url: https://github.com/amkisko/scout-cli.rs
-        tag: v0.6.0
+        tag: v0.6.1
         commit: ""  # set for reproducible build
