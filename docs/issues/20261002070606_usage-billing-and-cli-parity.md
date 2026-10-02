@@ -30,7 +30,7 @@ Modes skipped: boundary/control (no physical plant), learned-systems, lineage.
 ## Next
 
 1. Live smoke of `usage` / `billing` with a real org key.
-2. PR citing RFC-0007.
+2. Tag and GitHub-release 0.6.0 (`cargo run -p release`).
 
 ## Source
 

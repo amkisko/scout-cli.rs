@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 (2026-10-02)
+
 - Add `scout usage` (web transactions from throughput) and `scout billing` (org `/usage` billed figures) per RFC 0007.
 - Cap parallel usage app fetches with `--concurrency` (default 4, max 32).
 - Move OpenAPI spec to `docs/openapi.yaml` and remove `doc/`.
