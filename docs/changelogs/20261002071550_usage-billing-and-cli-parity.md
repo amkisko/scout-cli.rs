@@ -10,7 +10,7 @@ Library helpers for resource ids, time parse, usage math, and org `/usage`. CLI 
 
 ## Next
 
-Live API smoke for usage/billing against a real org key. Consider parallel fan-out for usage app fetches under a named budget.
+Live API smoke for usage/billing against a real org key. Shipped in 0.6.0; see docs/changelogs/20261002075804_scout-cli-0.6.0.md.
 
 ## Source
 
