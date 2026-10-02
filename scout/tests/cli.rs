@@ -580,5 +580,42 @@ fn help_documents_setup_and_web() {
         .assert()
         .success()
         .stdout(predicate::str::contains("--web"))
-        .stdout(predicate::str::contains("setup"));
+        .stdout(predicate::str::contains("setup"))
+        .stdout(predicate::str::contains("usage"))
+        .stdout(predicate::str::contains("billing"))
+        .stdout(predicate::str::contains("docs"));
+}
+
+#[test]
+fn docs_lists_frameworks_without_api_key() {
+    scout()
+        .arg("docs")
+        .arg("--plain")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("rails"))
+        .stdout(predicate::str::contains("django"));
+}
+
+#[test]
+fn docs_unknown_framework_fails() {
+    scout()
+        .arg("docs")
+        .arg("not-a-framework")
+        .arg("--plain")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown framework"));
+}
+
+#[test]
+fn usage_help_documents_billing_period() {
+    scout()
+        .arg("usage")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--billing-period"))
+        .stdout(predicate::str::contains("--by-day"))
+        .stdout(predicate::str::contains("--concurrency"));
 }

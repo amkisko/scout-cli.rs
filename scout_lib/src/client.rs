@@ -36,7 +36,7 @@ pub struct Client {
     api_key: String,
     api_base: String,
     user_agent: String,
-    http: HttpClient,
+    pub(crate) http: HttpClient,
 }
 
 impl Client {
@@ -727,7 +727,11 @@ impl Client {
         Ok(res.get("results").cloned().unwrap_or(Value::Null))
     }
 
-    fn auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    pub(crate) fn api_base(&self) -> &str {
+        &self.api_base
+    }
+
+    pub(crate) fn auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         let mut headers = HeaderMap::new();
         headers.insert(
             "X-SCOUT-API",
@@ -741,7 +745,7 @@ impl Client {
         req.headers(headers)
     }
 
-    async fn send(&self, req: reqwest::RequestBuilder) -> Result<Value, Error> {
+    pub(crate) async fn send(&self, req: reqwest::RequestBuilder) -> Result<Value, Error> {
         let res = req.send().await.map_err(|e| Error::Other(e.to_string()))?;
         let status = res.status();
         let body = res.text().await.map_err(|e| Error::Other(e.to_string()))?;

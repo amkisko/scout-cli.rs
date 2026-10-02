@@ -22,6 +22,6 @@ Discuss RFC 0001 until 2026-08-31. Commit when asked. Archive format versioning 
 
 ## Source
 
-Upstream: README, CHANGELOG 0.3.0 and 0.4.0, doc/openapi.yaml.
+Upstream: README, CHANGELOG 0.3.0 and 0.4.0, docs/openapi.yaml.
 
 Downstream: rfcs/0003-secrets-and-config.md, rfcs/0004-archive-diff-batch.md, rfcs/0005-query-commands-and-output.md.

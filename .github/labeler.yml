@@ -21,7 +21,7 @@ scout_lib:
       - any-glob-to-any-file: scout_lib/**
 documentation:
   - changed-files:
-      - any-glob-to-any-file: ["doc/**/*", "**/*.md"]
+      - any-glob-to-any-file: ["docs/**/*", "**/*.md"]
 packaging:
   - changed-files:
       - any-glob-to-any-file: packaging/**

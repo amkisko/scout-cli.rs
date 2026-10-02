@@ -47,6 +47,6 @@ Informational: RFC 0002 (positioning).
 
 Standards Track, Stable: RFC 0003 (secrets and config), RFC 0004 (archive, diff, and batch), RFC 0005 (query commands and output).
 
-Standards Track, Proposed: RFC 0006 (app resolve, web open, and agent setup).
+Standards Track, Proposed: RFC 0006 (app resolve, web open, and agent setup), RFC 0007 (usage, billing, and CLI parity).
 
 A public API, CLI, file, or protocol change needs a new Standards Track RFC.

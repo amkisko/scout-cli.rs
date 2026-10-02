@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add `scout usage` (web transactions from throughput) and `scout billing` (org `/usage` billed figures) per RFC 0007.
+- Cap parallel usage app fetches with `--concurrency` (default 4, max 32).
+- Move OpenAPI spec to `docs/openapi.yaml` and remove `doc/`.
+- Accept job full names (`queue/JobName`), compact relative times (`7d`, `1h`, `2w`), and anomaly endpoint Base64 or plain names.
+- Default to compact JSON when stdout is not a TTY unless `--plain` or an explicit JSON flag is set.
+- Add `scout docs [framework]` for Scout setup documentation links; keep `scout setup` for agent skill provisioning.
+- Improve TUI chart honesty: peak downsample, drop trailing partial bucket, promote large ms stats to seconds.
+- Enrich `scout app` with `last_reported_at` from the apps list; clarify job-trace 404; rename latency series `total` to `execution_time_total` in JSON.
+
 ## 0.5.0 (2026-09-21)
 
 - Store Scout metric series that arrive as `[timestamp, value]` tuples so `archive pull --resource metrics` writes daily buckets and `scout diff metrics` can read them.

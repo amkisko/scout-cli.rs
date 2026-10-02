@@ -1847,6 +1847,7 @@ name = "scout"
 version = "0.5.0"
 dependencies = [
  "assert_cmd",
+ "chrono",
  "clap",
  "clap_complete",
  "clap_mangen",

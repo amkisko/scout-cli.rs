@@ -16,3 +16,10 @@ Distribution artifacts and package descriptors for ScoutAPM CLI.
 **Gentoo:** Use the ebuild in a local overlay or generate a full ebuild with `cargo ebuild` (see [gentoo/README.md](gentoo/README.md)).
 
 All packaging is best-effort; prefer `cargo install --path scout` or the official install method documented in the main README when in doubt.
+
+**Homebrew 6+ tap trust:** third-party taps may require trusting the formula before upgrade. For this project's tap:
+
+```bash
+brew trust --formula amkisko/tap/scout-cli   # or: brew trust amkisko/tap
+brew upgrade scout-cli
+```
