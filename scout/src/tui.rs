@@ -321,16 +321,7 @@ fn metric_unit(metric_type: &str) -> &'static str {
 }
 
 fn downsample_points(points: &[(String, f64)], max_count: usize) -> Vec<(String, f64)> {
-    if points.len() <= max_count {
-        return points.to_vec();
-    }
-    let step = points.len() as f64 / max_count as f64;
-    (0..max_count)
-        .map(|i| {
-            let idx = ((i as f64 * step).floor() as usize).min(points.len() - 1);
-            points[idx].clone()
-        })
-        .collect()
+    crate::chart::downsample_peak(points, max_count)
 }
 
 fn compact_time_label(ts: &str, use_utc: bool) -> String {
@@ -353,6 +344,7 @@ fn render_metric_chart(
     let mut points: Vec<(String, f64)> = Vec::new();
     collect_series_points(v, &mut points);
     points.sort_by(|a, b| a.0.cmp(&b.0)); // asc by time (oldest -> newest)
+    points = crate::chart::trim_partial_bucket(&points, chrono::Utc::now());
 
     if points.is_empty() {
         let empty = Paragraph::new("No time-series points in response.")
@@ -387,6 +379,11 @@ fn render_metric_chart(
         .map(|(_, v)| *v)
         .fold(f64::MAX, |a, b| a.min(b));
     let latest_v = sampled.last().map(|(_, v)| *v).unwrap_or(0.0);
+    let avg_v = if sampled.is_empty() {
+        0.0
+    } else {
+        sampled.iter().map(|(_, v)| *v).sum::<f64>() / sampled.len() as f64
+    };
 
     let bar_width = if target_bars >= 24 {
         1
@@ -425,19 +422,12 @@ fn render_metric_chart(
     f.render_widget(chart, chart_area);
 
     let unit = metric_type.map(metric_unit).unwrap_or("");
-    let suffix = if unit.is_empty() {
-        "".to_string()
-    } else {
-        format!(" {}", unit)
-    };
     let meta = format!(
-        "latest: {:.2}{}  min: {:.2}{}  max: {:.2}{}  points: {}",
-        latest_v,
-        suffix,
-        min_v,
-        suffix,
-        max_v,
-        suffix,
+        "Avg: {}  Min: {}  Max: {}  Summary: {}  points: {}",
+        crate::chart::format_stat(avg_v, unit),
+        crate::chart::format_stat(min_v, unit),
+        crate::chart::format_stat(max_v, unit),
+        crate::chart::format_stat(latest_v, unit),
         points.len()
     );
     let meta_widget = Paragraph::new(meta).block(

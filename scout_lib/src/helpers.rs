@@ -301,8 +301,11 @@ pub fn build_endpoint_trace_url(app_id: u64, endpoint_id: &str, trace_id: u64) -
 
 /// Decode base64url endpoint ID to a readable string when possible.
 pub fn decode_endpoint_id(endpoint_id: &str) -> Result<String, String> {
-    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+    let decoded = base64::engine::general_purpose::URL_SAFE
         .decode(endpoint_id.as_bytes())
+        .or_else(|_| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(endpoint_id.as_bytes())
+        })
         .or_else(|_| base64::engine::general_purpose::STANDARD.decode(endpoint_id.as_bytes()))
         .map_err(|e| e.to_string())?;
     String::from_utf8(decoded).map_err(|e| e.to_string())
@@ -329,49 +332,19 @@ pub fn format_timestamp_display(ts: &str, use_utc: bool) -> String {
     }
 }
 
-/// Parse ISO 8601 time string.
+/// Parse ISO 8601 or compact relative (`1h`, `7d`) time string.
 pub fn parse_time(s: &str) -> Result<DateTime<Utc>, String> {
-    let s = s.trim().trim_end_matches('Z').trim_end_matches('z');
-    let parsed = chrono::DateTime::parse_from_rfc3339(&format!("{}Z", s))
-        .or_else(|_| chrono::DateTime::parse_from_rfc3339(s))
-        .map_err(|e| e.to_string())?;
-    Ok(parsed.with_timezone(&Utc))
+    crate::time_parse::parse_instant(s, Utc::now())
 }
 
-/// Parse range string (e.g. "30min", "1day", "7days") into seconds.
+/// Parse range string (e.g. "30min", "1day", "7days", "7d") into seconds.
 pub fn parse_range(range_str: &str) -> Result<u64, String> {
-    let s = range_str.trim().to_lowercase();
-    let s = s.replace(" ", "");
-    let mut num_end = 0;
-    for c in s.chars() {
-        if c.is_ascii_digit() {
-            num_end += 1;
-        } else {
-            break;
-        }
-    }
-    let num: u64 = s[..num_end]
-        .parse()
-        .map_err(|_| format!("Invalid range: {}", range_str))?;
-    let unit = s[num_end..].trim();
-    let secs = match unit {
-        u if u.starts_with("min") => num * 60,
-        u if u.starts_with("hr") || u.starts_with("hour") => num * 3600,
-        u if u.starts_with("day") => num * 86400,
-        _ => return Err(format!("Unknown time unit in range: {}", range_str)),
-    };
-    Ok(secs)
+    crate::time_parse::parse_duration_secs(range_str)
 }
 
 /// Compute (from, to) ISO 8601 strings for a range ending at `to` (or now).
 pub fn calculate_range(range: &str, to: Option<&str>) -> Result<(String, String), String> {
-    let end_time = match to {
-        Some(t) => parse_time(t)?,
-        None => Utc::now(),
-    };
-    let secs = parse_range(range)?;
-    let start_time = end_time - chrono::Duration::seconds(secs as i64);
-    Ok((format_time(start_time), format_time(end_time)))
+    crate::time_parse::calculate_range_at(range, to, Utc::now())
 }
 
 #[cfg(test)]
@@ -393,7 +366,8 @@ mod tests {
         assert!(parse_range("").is_err());
         assert!(parse_range("min").is_err());
         assert!(parse_range("7").is_err());
-        assert!(parse_range("7weeks").is_err());
+        assert_eq!(parse_range("7weeks").unwrap(), 7 * 7 * 86400);
+        assert!(parse_range("7fortnights").is_err());
     }
 
     #[test]

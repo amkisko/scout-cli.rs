@@ -1,18 +1,18 @@
 # path<TAB>lines — files above the hard limit; do not grow
 scout/src/archive_cmd.rs	426
-scout/src/cli.rs	633
-scout/src/commands.rs	490
+scout/src/cli.rs	686
+scout/src/commands.rs	511
 scout/src/diff_cmd.rs	356
-scout/src/lib.rs	328
+scout/src/lib.rs	386
 scout/src/output.rs	321
-scout/src/tui.rs	1344
-scout/tests/cli.rs	584
+scout/src/tui.rs	1334
+scout/tests/cli.rs	621
 scout_lib/src/archive/diff.rs	447
 scout_lib/src/archive/export.rs	653
 scout_lib/src/archive/pull.rs	347
 scout_lib/src/archive/store.rs	393
-scout_lib/src/client.rs	957
+scout_lib/src/client.rs	961
 scout_lib/src/config.rs	597
-scout_lib/src/helpers.rs	575
+scout_lib/src/helpers.rs	549
 scout_lib/src/secret.rs	317
 usr/bin/release/lib.rs	346

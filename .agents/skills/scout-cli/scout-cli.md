@@ -24,6 +24,10 @@ Defaults: omit `APP` when `--app-id`, `SCOUT_APP_ID` / `app.id`, or `SCOUT_APP` 
 | Errors | `scout errors APP --json` |
 | Insights | `scout insights APP --json` |
 | Trace | `scout trace APP TRACE_ID --json` |
+| Usage | `scout usage --from 7d --json` |
+| Usage (parallel) | `scout usage --from 7d --concurrency 8 --json` |
+| Billing | `scout billing --json` |
+| Framework docs | `scout docs rails --json` |
 | Open UI | add `--web` (prints URL with `--no-input`) |
 | Parse UI URL | `scout parse-url URL --json` |
 | Local archive | `scout archive pull APP --range 7days` |
@@ -34,7 +38,7 @@ Exit codes: 0 success, 2 usage, 3 auth, 4 API, 5 I/O.
 
 ## Output
 
-- Agents and scripts: `--json` or `-o json`
+- Agents and scripts: `--json` or `-o json` (piped stdout also defaults to compact JSON unless `--plain`)
 - Stable TSV: `--plain`
 - Batch stdout is always a JSON report
 

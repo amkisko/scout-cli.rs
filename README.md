@@ -142,14 +142,15 @@ See [packaging/flatpak/](packaging/flatpak/). Build may require a Rust-enabled S
 
 ## Usage
 
-All [OpenAPI v0.1](doc/openapi.yaml) endpoints are supported. For ScoutAPM API questions or additional endpoints, see [ScoutAPM documentation](https://scoutapm.com/docs).
+All [OpenAPI v0.1](docs/openapi.yaml) endpoints are supported. For ScoutAPM API questions or additional endpoints, see [ScoutAPM documentation](https://scoutapm.com/docs).
 
 **Output format:** use `-o` / `--output`, `--json`, or `--plain`:
 
-- **plain** (default) — human-readable tables and key-value text
-- **--plain** — script-stable tab-separated records (one per line)
+- **plain** (default on a TTY) — human-readable tables and key-value text
+- **--plain** — script-stable tab-separated records (one per line); also keeps TSV when piped
 - **-o json** — pretty JSON (backward compatible)
 - **--json** — compact JSON for scripts
+- When stdout is not a TTY and none of the JSON/`--plain` flags force a mode, output defaults to compact JSON (RFC 0007).
 
 **Global flags:** `--quiet`, `--verbose`, `--debug`, `--no-color`, `--no-input`, `--timeout`, `--api-base`. Use `scout config --dry-run` to preview config writes. Most flags work before or after the subcommand.
 
@@ -185,8 +186,18 @@ scout endpoint-traces 123 <endpoint_id> --range 1day
 # Jobs (background jobs)
 scout jobs 123 --range 1day
 scout job-metrics 123 <job_id>
-scout job-metric 123 <job_id> execution_time --range 7days
+scout job-metric 123 default/MyWorker execution_time --range 7days
 scout job-traces 123 <job_id> --range 1day
+
+# Usage and billing
+scout usage --from 7d
+scout usage --by-day --by-app --billing-period
+scout usage --from 30d --concurrency 8
+scout billing
+
+# Framework docs (agent skill setup remains `scout setup`)
+scout docs
+scout docs rails
 
 # Traces
 scout trace 123 456

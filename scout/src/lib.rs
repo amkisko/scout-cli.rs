@@ -2,18 +2,24 @@
 
 pub mod archive_cmd;
 pub mod batch_cmd;
+pub mod billing_cmd;
+pub mod chart;
 pub mod cli;
 pub mod cli_error;
 pub mod commands;
 pub mod completions;
+pub mod concurrency;
 pub mod config_cmd;
 pub mod diff_cmd;
+pub mod docs_cmd;
 pub mod execute;
 pub mod exit;
 pub mod man;
 pub mod output;
 pub mod setup_cmd;
 pub mod tui;
+pub mod usage_cmd;
+pub mod usage_report;
 pub mod util;
 pub mod web;
 
@@ -80,6 +86,13 @@ fn try_run() -> Result<(), AppExit> {
             quiet: cli.quiet,
         })
         .map_err(|error| print_error(&error, &error_context));
+    }
+
+    if let Some(Commands::Docs { framework }) = &cli.command {
+        let mode = resolve_output_mode(&cli);
+        let json = matches!(mode, OutputMode::JsonCompact | OutputMode::JsonPretty);
+        return docs_cmd::run(framework.as_deref(), json)
+            .map_err(|error| print_error(&error, &error_context));
     }
 
     if let Some(Commands::ParseUrl { url }) = &cli.command {
@@ -268,6 +281,40 @@ async fn run_async(cli: Cli, error_context: ErrorContext) -> Result<(), AppExit>
         )
         .await
         .map_err(|error| print_error(&error, &error_context)),
+        Commands::Usage {
+            app,
+            from,
+            to,
+            range,
+            all,
+            by_day,
+            by_app,
+            billing_period,
+            limit,
+            concurrency,
+        } => usage_cmd::run(
+            &client,
+            usage_cmd::UsageOptions {
+                app,
+                from,
+                to,
+                range,
+                all,
+                by_day,
+                by_app,
+                billing_period,
+                limit,
+                concurrency,
+                app_id_override: run_context.app_id_override,
+                quiet: run_context.quiet,
+                mode: run_context.mode,
+            },
+        )
+        .await
+        .map_err(|error| print_scout_error(&error, &error_context)),
+        Commands::Billing => billing_cmd::run(&client, run_context.mode)
+            .await
+            .map_err(|error| print_scout_error(&error, &error_context)),
         other => commands::run_api_command(&client, other, &run_context)
             .await
             .map_err(|error| print_scout_error(&error, &error_context)),
@@ -279,7 +326,18 @@ fn resolve_output_mode(cli: &Cli) -> OutputMode {
         OutputFormatArg::Plain => OutputFormat::Plain,
         OutputFormatArg::Json => OutputFormat::Json,
     };
-    output::resolve_output_mode(output, cli.json, cli.plain, cli.json_pretty)
+    let mut mode = output::resolve_output_mode(output, cli.json, cli.plain, cli.json_pretty);
+    // RFC 0007: non-TTY stdout defaults to compact JSON unless --plain or JSON was chosen.
+    if matches!(mode, OutputMode::HumanPlain)
+        && !util::stdout_is_tty()
+        && !cli.plain
+        && !cli.json
+        && !cli.json_pretty
+        && !matches!(cli.output, OutputFormatArg::Json)
+    {
+        mode = OutputMode::JsonCompact;
+    }
+    mode
 }
 
 fn run_config(

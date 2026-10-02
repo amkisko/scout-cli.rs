@@ -18,6 +18,63 @@ security:
   - apiKeyHeader: []
 
 paths:
+  /usage:
+    get:
+      summary: Organization usage for the current billing period
+      description: >
+        Returns billed usage for the current billing period (APM transactions,
+        nodes, errors, logs). Distinct from per-app throughput estimates.
+      operationId: getOrgUsage
+      tags:
+        - Usage
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  header:
+                    $ref: '#/components/schemas/ResponseHeader'
+                  results:
+                    type: object
+                    properties:
+                      billing_period:
+                        type: object
+                        properties:
+                          start:
+                            type: string
+                          end:
+                            type: string
+                      pricing_style:
+                        type: string
+                      apm:
+                        type: object
+                        properties:
+                          total_transactions:
+                            type: integer
+                          limit:
+                            type: integer
+                      nodes:
+                        type: object
+                        properties:
+                          active_count:
+                            type: integer
+                      errors:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                          limit:
+                            type: integer
+                      logs:
+                        type: object
+                        properties:
+                          bytes_used:
+                            type: integer
+                          limit_bytes:
+                            type: integer
   /apps:
     get:
       summary: List all applications

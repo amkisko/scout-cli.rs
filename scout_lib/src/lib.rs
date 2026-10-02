@@ -9,7 +9,11 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod helpers;
+pub mod org;
+pub mod resource_id;
 pub mod secret;
+pub mod time_parse;
+pub mod usage;
 
 pub use app_resolve::{app_ref_needs_list, resolve_app_id_from_list, resolve_app_target};
 pub use archive::{
@@ -31,10 +35,19 @@ pub use helpers::{
     build_job_trace_url, build_job_url, build_scout_url, build_trace_url, format_timestamp_display,
     get_api_key, parse_scout_url, scout_web_origin, ApiKeySource, ParsedScoutUrl, ScoutUrlType,
 };
+pub use org::normalize_job_latency_series;
+pub use resource_id::{job_display_name, resolve_anomaly_endpoint, resolve_job_id};
 pub use secret::{
     bitwarden, bitwarden_attempt, bitwarden_configured, keepassxc, keepassxc_attempt,
     keepassxc_configured, one_password, one_password_attempt, one_password_configured,
     BackendAttempt,
+};
+pub use time_parse::{
+    calculate_range_at, format_time as format_utc_time, parse_duration_secs, parse_instant,
+    resolve_timeframe, MAX_RELATIVE_DAYS,
+};
+pub use usage::{
+    bucket_by_day, calculate_transactions, clamp_billing_end, series_points, split_timeframe,
 };
 
 /// Library version for User-Agent and diagnostics.

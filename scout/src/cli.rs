@@ -15,7 +15,7 @@ Examples:
   echo '[{\"args\":[\"archive\",\"path\"]}]' | scout batch
 
 Documentation: https://github.com/amkisko/scout-cli.rs
-API reference: https://github.com/amkisko/scout-cli.rs/blob/main/doc/openapi.yaml
+API reference: https://github.com/amkisko/scout-cli.rs/blob/main/docs/openapi.yaml
 Report issues: https://github.com/amkisko/scout-cli.rs/issues";
 
 pub const AFTER_HELP: &str = "\
@@ -219,6 +219,9 @@ pub enum Commands {
     #[command(
         arg_required_else_help = true,
         allow_missing_positional = true,
+        after_help = "Examples:\n  \
+          scout metric APP response_time --range 7days\n  \
+          scout metric APP throughput --from 7d",
         next_help_heading = "Metrics"
     )]
     Metric {
@@ -320,6 +323,9 @@ pub enum Commands {
     #[command(
         arg_required_else_help = true,
         allow_missing_positional = true,
+        after_help = "Examples:\n  \
+          scout job-metric APP ZGVmYXVsdC9NeVdvcmtlcg== execution_time --range 1day\n  \
+          scout job-metric APP default/MyWorker throughput --range 1day",
         next_help_heading = "Jobs"
     )]
     JobMetric {
@@ -517,13 +523,7 @@ pub enum Commands {
 
     /// Provision the scout agent skill (pray-first)
     #[command(
-        after_help = "Prefers pray when available:\n  \
-          1. Detect Prayfile and run `pray install`\n  \
-          2. If pray is missing, print install guidance\n  \
-          3. Use --copy only as a fallback to write `.agents/skills/scout-cli`\n\n\
-          Examples:\n  \
-          scout setup\n  \
-          scout setup --copy",
+        after_help = "Prefers pray when available. Examples:\n  scout setup\n  scout setup --copy",
         next_help_heading = "Utilities"
     )]
     Setup {
@@ -534,6 +534,59 @@ pub enum Commands {
         #[arg(long, value_name = "DIR")]
         path: Option<std::path::PathBuf>,
     },
+
+    /// Show Scout framework setup documentation links
+    #[command(
+        after_help = "Examples:\n  scout docs\n  scout docs rails\n  scout docs django --json",
+        next_help_heading = "Utilities"
+    )]
+    Docs {
+        /// Framework name (case-insensitive). Omit to list supported names.
+        framework: Option<String>,
+    },
+
+    /// Estimate web transaction usage from throughput
+    #[command(
+        after_help = "Counts web transactions only (jobs excluded). Examples:\n  \
+          scout usage --from 7d\n  \
+          scout usage --by-day --by-app --billing-period\n  \
+          scout usage APP --from 30d --all --concurrency 8",
+        next_help_heading = "Usage"
+    )]
+    Usage {
+        #[command(flatten)]
+        app: AppIdArgs,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        range: Option<String>,
+        /// Include apps with zero usage
+        #[arg(long)]
+        all: bool,
+        /// Daily breakdown
+        #[arg(long)]
+        by_day: bool,
+        /// Per-app rows (with --by-day)
+        #[arg(long)]
+        by_app: bool,
+        /// Use the current billing period window
+        #[arg(long)]
+        billing_period: bool,
+        #[arg(short = 'n', long)]
+        limit: Option<u32>,
+        /// Max parallel app fetches (default 4, max 32)
+        #[arg(long, value_name = "N")]
+        concurrency: Option<u32>,
+    },
+
+    /// Show billed usage for the current billing period
+    #[command(
+        after_help = "Exact figures from /usage (includes jobs). Example:\n  scout billing --json",
+        next_help_heading = "Usage"
+    )]
+    Billing,
 
     /// Manage Scout config (`scout config path` shows the directory)
     #[command(next_help_heading = "Configuration")]
