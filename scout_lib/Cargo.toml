@@ -6,9 +6,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation.workspace = true
-keywords.workspace = true
-categories.workspace = true
+documentation = "https://docs.rs/scout_lib"
+readme = "README.md"
+keywords = ["scout", "apm", "scoutapm", "observability"]
+categories = ["api-bindings", "development-tools"]
 description = "ScoutAPM API client library"
 
 [features]

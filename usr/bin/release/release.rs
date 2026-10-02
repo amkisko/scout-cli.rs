@@ -86,7 +86,7 @@ fn main() {
     run_cmd(
         &root_display,
         "cargo",
-        &["publish", "-p", "scout", "--allow-dirty"],
+        &["publish", "-p", "scout-cli", "--allow-dirty"],
     );
     run_cmd(&root_display, "git", &["tag", &format!("v{version}")]);
     run_cmd(&root_display, "git", &["push", "--tags"]);

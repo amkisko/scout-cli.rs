@@ -156,6 +156,27 @@ pub fn check_packaging(root: &Path) -> Result<(), Vec<String>> {
         root.join("scout/Cargo.toml"),
         &format!("scout_lib = {{ path = \"../scout_lib\", version = \"{version}\""),
     );
+    expect_contains(
+        &mut mismatches,
+        root.join("scout/Cargo.toml"),
+        "name = \"scout-cli\"",
+    );
+    expect_file(
+        &mut mismatches,
+        root.join("scout_lib/LICENSE.md"),
+    );
+    expect_file(
+        &mut mismatches,
+        root.join("scout_lib/README.md"),
+    );
+    expect_file(
+        &mut mismatches,
+        root.join("scout/LICENSE.md"),
+    );
+    expect_file(
+        &mut mismatches,
+        root.join("scout/README.md"),
+    );
 
     let ebuild = root.join(format!(
         "packaging/gentoo/app-misc/scout-cli/scout-cli-{version}.ebuild"
@@ -209,6 +230,12 @@ fn expect_contains(mismatches: &mut Vec<String>, path: PathBuf, expected: &str) 
             "{} is out of sync (expected {expected})",
             path.display()
         ));
+    }
+}
+
+fn expect_file(mismatches: &mut Vec<String>, path: PathBuf) {
+    if !path.is_file() {
+        mismatches.push(format!("missing file: {}", path.display()));
     }
 }
 
