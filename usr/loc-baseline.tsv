@@ -15,4 +15,3 @@ scout_lib/src/client.rs	961
 scout_lib/src/config.rs	597
 scout_lib/src/helpers.rs	549
 scout_lib/src/secret.rs	317
-usr/bin/release/lib.rs	346
