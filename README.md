@@ -97,13 +97,13 @@ Install the CLI for your chosen backend (`op`, `bw`, or `keepassxc-cli`) and ens
 ```bash
 cargo install --path scout
 # or from crates.io / git
-cargo install scout-cli
-cargo install --git https://github.com/amkisko/scout-cli.rs --package scout-cli
+cargo install scoutapm-cli
+cargo install --git https://github.com/amkisko/scout-cli.rs --package scoutapm-cli
 # optional: include parquet archive export (larger binary)
 cargo install --path scout --features export-parquet
 ```
 
-Library crate: [`scout_lib`](https://crates.io/crates/scout_lib). The crates.io name `scout` belongs to an unrelated fuzzy-finder project; this CLI publishes as `scout-cli`.
+Library crate: [`scout_lib`](https://crates.io/crates/scout_lib). The crates.io names `scout` and `scout-cli` belong to unrelated projects; this CLI publishes as `scoutapm-cli`.
 
 **Homebrew** (macOS/Linux)
 

@@ -21,7 +21,7 @@ prepare() {
 
 build() {
   cd "$srcdir/scout-cli.rs-$pkgver"
-  cargo build --release -p scout-cli
+  cargo build --release -p scoutapm-cli
 }
 
 package() {

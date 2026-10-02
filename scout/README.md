@@ -1,15 +1,15 @@
-# scout-cli
+# scoutapm-cli
 
 ScoutAPM command-line client. Query apps, endpoints, traces, metrics, errors,
 usage, and billing. Binary name is `scout`.
 
-The crates.io package is `scout-cli` because `scout` is already taken by an
-unrelated fuzzy-finder crate.
+The crates.io package is `scoutapm-cli` because `scout` and `scout-cli` are
+already taken by unrelated projects.
 
 ## Install
 
 ```bash
-cargo install scout-cli
+cargo install scoutapm-cli
 # or from the repository path:
 cargo install --path scout
 ```

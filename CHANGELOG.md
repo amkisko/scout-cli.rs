@@ -4,8 +4,8 @@
 
 ## 0.6.1 (2026-10-02)
 
-- Publish the CLI on crates.io as `scout-cli` (binary remains `scout`); `scout` is taken by another project.
-- Ship `LICENSE.md` and README with `scout_lib` and `scout-cli` crate packages; set library keywords and categories for an API client.
+- Publish the CLI on crates.io as `scoutapm-cli` (binary remains `scout`); `scout` and `scout-cli` are taken by other projects.
+- Ship `LICENSE.md` and README with `scout_lib` and `scoutapm-cli` crate packages; set library keywords and categories for an API client.
 
 ## 0.6.0 (2026-10-02)
 

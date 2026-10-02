@@ -4,8 +4,8 @@ ScoutAPM API client library for Rust. Typed access to apps, metrics, endpoints,
 jobs, traces, errors, insights, anomalies, org usage, and local archive helpers.
 
 The `scout` CLI in this repository depends on this crate. Install the CLI from
-GitHub, Homebrew (`scout-cli`), or crates.io package `scout-cli` (binary name
-`scout`). The crates.io name `scout` belongs to an unrelated fuzzy-finder project.
+GitHub, Homebrew (`scout-cli`), or crates.io package `scoutapm-cli` (binary name
+`scout`). The crates.io names `scout` and `scout-cli` belong to unrelated projects.
 
 ## Install
 
