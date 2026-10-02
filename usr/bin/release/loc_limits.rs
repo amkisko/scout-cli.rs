@@ -49,34 +49,34 @@ pub fn check_loc_limits(root: &Path) -> Result<LocReport, String> {
         let lines = count_lines(&path)?;
 
         if let Some(&allowed) = baseline.get(relative.as_str()) {
-            if lines > allowed {
-                errors.push(LocFinding {
+            match lines.cmp(&allowed) {
+                std::cmp::Ordering::Greater => errors.push(LocFinding {
                     path: relative,
                     lines,
                     kind: LocFindingKind::BaselineExceeded { allowed },
-                });
-            } else if lines < allowed {
-                warnings.push(LocFinding {
+                }),
+                std::cmp::Ordering::Less => warnings.push(LocFinding {
                     path: relative,
                     lines,
                     kind: LocFindingKind::BaselineShrink { allowed },
-                });
+                }),
+                std::cmp::Ordering::Equal => {}
             }
             continue;
         }
 
-        if lines > HARD_LIMIT {
-            errors.push(LocFinding {
+        match lines {
+            n if n > HARD_LIMIT => errors.push(LocFinding {
                 path: relative,
                 lines,
                 kind: LocFindingKind::HardLimit,
-            });
-        } else if lines > SOFT_LIMIT {
-            warnings.push(LocFinding {
+            }),
+            n if n > SOFT_LIMIT => warnings.push(LocFinding {
                 path: relative,
                 lines,
                 kind: LocFindingKind::SoftLimit,
-            });
+            }),
+            _ => {}
         }
     }
 
