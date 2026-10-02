@@ -78,16 +78,8 @@ fn main() {
         std::process::exit(1);
     }
 
-    run_cmd(
-        &root_display,
-        "cargo",
-        &["publish", "-p", "scout_lib", "--allow-dirty"],
-    );
-    run_cmd(
-        &root_display,
-        "cargo",
-        &["publish", "-p", "scout-cli", "--allow-dirty"],
-    );
+    publish_crate(&root_display, "scout_lib");
+    publish_crate(&root_display, "scoutapm-cli");
     run_cmd(&root_display, "git", &["tag", &format!("v{version}")]);
     run_cmd(&root_display, "git", &["push", "--tags"]);
     if Command::new("gh").arg("--version").output().is_ok() {
@@ -108,6 +100,34 @@ fn main() {
         );
     }
     println!("{}Release {version} completed!{}", GREEN, NC);
+}
+
+fn publish_crate(root: &str, package: &str) {
+    let args = ["publish", "-p", package, "--allow-dirty"];
+    let display = format!("cargo {}", args.join(" "));
+    eprintln!("{}{display}{NC}", GREEN);
+    let output = Command::new("cargo")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("run cargo publish");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    print!("{}", stdout);
+    eprint!("{}", stderr);
+    if output.status.success() {
+        return;
+    }
+    let combined = format!("{stdout}{stderr}");
+    if combined.contains("already uploaded") || combined.contains("already exists") {
+        eprintln!(
+            "{}{package} already on crates.io for this version; continuing{}",
+            YELLOW, NC
+        );
+        return;
+    }
+    eprintln!("{}Command failed: {display}{}", RED, NC);
+    std::process::exit(1);
 }
 
 fn run_cmd(root: &str, bin: &str, args: &[&str]) {

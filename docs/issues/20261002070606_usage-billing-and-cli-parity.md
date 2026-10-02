@@ -30,7 +30,7 @@ Modes skipped: boundary/control (no physical plant), learned-systems, lineage.
 ## Next
 
 1. Live smoke of `usage` / `billing` with a real org key.
-2. Publish and tag 0.6.1 (`scout_lib` + `scout-cli` on crates.io, GitHub release).
+2. Publish and tag 0.6.1 (`scoutapm-cli` on crates.io; `scout_lib` 0.6.1 already published).
 
 ## Source
 

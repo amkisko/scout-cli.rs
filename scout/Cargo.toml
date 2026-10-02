@@ -1,5 +1,5 @@
 [package]
-name = "scout-cli"
+name = "scoutapm-cli"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

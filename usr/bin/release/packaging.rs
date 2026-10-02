@@ -144,7 +144,7 @@ pub fn check_packaging(root: &Path) -> Result<(), Vec<String>> {
     expect_contains(
         &mut mismatches,
         root.join("scout/Cargo.toml"),
-        "name = \"scout-cli\"",
+        "name = \"scoutapm-cli\"",
     );
     expect_file(&mut mismatches, root.join("scout_lib/LICENSE.md"));
     expect_file(&mut mismatches, root.join("scout_lib/README.md"));
