@@ -161,22 +161,10 @@ pub fn check_packaging(root: &Path) -> Result<(), Vec<String>> {
         root.join("scout/Cargo.toml"),
         "name = \"scout-cli\"",
     );
-    expect_file(
-        &mut mismatches,
-        root.join("scout_lib/LICENSE.md"),
-    );
-    expect_file(
-        &mut mismatches,
-        root.join("scout_lib/README.md"),
-    );
-    expect_file(
-        &mut mismatches,
-        root.join("scout/LICENSE.md"),
-    );
-    expect_file(
-        &mut mismatches,
-        root.join("scout/README.md"),
-    );
+    expect_file(&mut mismatches, root.join("scout_lib/LICENSE.md"));
+    expect_file(&mut mismatches, root.join("scout_lib/README.md"));
+    expect_file(&mut mismatches, root.join("scout/LICENSE.md"));
+    expect_file(&mut mismatches, root.join("scout/README.md"));
 
     let ebuild = root.join(format!(
         "packaging/gentoo/app-misc/scout-cli/scout-cli-{version}.ebuild"
