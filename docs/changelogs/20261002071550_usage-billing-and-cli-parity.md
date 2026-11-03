@@ -1,5 +1,9 @@
 # Usage, billing, and CLI parity
 
+## Participants
+
+Andrei Makarov (@amkisko)
+
 ## Decisions
 
 Ship RFC 0007 surfaces: usage, billing, compact relative times, job full-name encode, pipe auto-JSON, scout docs, chart honesty, and related query polish.

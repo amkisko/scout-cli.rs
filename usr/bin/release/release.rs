@@ -48,25 +48,10 @@ fn main() {
         std::process::exit(1);
     }
 
-    if !Command::new("git")
-        .args(["diff", "--quiet"])
-        .current_dir(&root)
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-    {
-        eprintln!(
-            "{}git working directory not clean, please commit your changes first{}",
-            RED, NC
-        );
-        eprintln!(
-            "{}Note: cargo fmt may have modified files. Review and commit changes before releasing.{}",
-            YELLOW, NC
-        );
-        std::process::exit(1);
-    }
+    assert_clean_worktree(&root);
 
     let version = release::workspace_version(&root);
+    release::require_changelog_version(&root, &version);
     println!("Ready to release version {}", version);
     print!("Continue? [Y/n] ");
     let _ = io::stdout().flush();
@@ -80,18 +65,18 @@ fn main() {
 
     publish_crate(&root_display, "scout_lib");
     publish_crate(&root_display, "scoutapm-cli");
-    run_cmd(&root_display, "git", &["tag", &format!("v{version}")]);
-    run_cmd(&root_display, "git", &["push", "--tags"]);
+    let tag = format!("v{version}");
+    run_cmd(&root_display, "git", &["tag", &tag]);
+    run_cmd(
+        &root_display,
+        "git",
+        &["push", "origin", "HEAD", &format!("refs/tags/{tag}")],
+    );
     if Command::new("gh").arg("--version").output().is_ok() {
         run_cmd(
             &root_display,
             "gh",
-            &[
-                "release",
-                "create",
-                &format!("v{version}"),
-                "--generate-notes",
-            ],
+            &["release", "create", &tag, "--generate-notes"],
         );
     } else {
         eprintln!(
@@ -100,6 +85,29 @@ fn main() {
         );
     }
     println!("{}Release {version} completed!{}", GREEN, NC);
+}
+
+fn assert_clean_worktree(root: &std::path::Path) {
+    let output = Command::new("git")
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .current_dir(root)
+        .output()
+        .expect("git status");
+    if !output.status.success() {
+        eprintln!("{}git status failed{}", RED, NC);
+        std::process::exit(1);
+    }
+    if !output.stdout.is_empty() {
+        eprintln!(
+            "{}git working directory not clean, please commit your changes first{}",
+            RED, NC
+        );
+        eprintln!(
+            "{}Note: cargo fmt may have modified files. Review and commit changes before releasing.{}",
+            YELLOW, NC
+        );
+        std::process::exit(1);
+    }
 }
 
 fn publish_crate(root: &str, package: &str) {
